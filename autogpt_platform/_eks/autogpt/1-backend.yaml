@@ -1,0 +1,133 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: autogpt
+  annotations:
+    kompose.version: 1.35.0 (9532ceef3)
+  labels:
+    io.kompose.service: backend
+  name: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: backend
+  template:
+    metadata:
+      annotations:
+        kompose.version: 1.35.03
+      labels:
+        io.kompose.service: backend
+    spec:
+      containers:
+        - image: 582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/platform/backend:latest
+          command: ["/bin/sh", "-c", "sleep infinity"] # poetry run app
+          #command: ["/bin/sh","-c","export $(grep -v '^#' .env | xargs) && poetry run app"]
+          name: backend
+          ports:
+            - containerPort: 8001
+              protocol: TCP
+            - containerPort: 8002
+              protocol: TCP
+            - containerPort: 8003
+              protocol: TCP
+            - containerPort: 8004
+              protocol: TCP
+            - containerPort: 8005
+              protocol: TCP
+            - containerPort: 8006
+              protocol: TCP
+            - containerPort: 8007
+              protocol: TCP
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: autogpt
+  annotations:
+    kompose.version: 1.35.0 (9532ceef3)
+  labels:
+    io.kompose.service: backend
+  name: backend
+spec:
+  type: NodePort
+  ports:
+    - name: "8001"
+      port: 8001
+      targetPort: 8001
+    - name: "8002"
+      port: 8002
+      targetPort: 8002
+    - name: "8003"
+      port: 8003
+      targetPort: 8003
+    - name: "8004"
+      port: 8004
+      targetPort: 8004
+    - name: "8005"
+      port: 8005
+      targetPort: 8005
+    - name: "8006"
+      port: 8006
+      targetPort: 8006
+    - name: "8007"
+      port: 8007
+      targetPort: 8007
+    - name: "8015"
+      port: 8015
+      targetPort: 8015
+  selector:
+    io.kompose.service: backend
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: backend
+  namespace: autogpt
+  annotations:
+    kubernetes.io/ingress.class: alb
+    # spec.ingressClassName: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing 
+    alb.ingress.kubernetes.io/target-type: instance
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:582822331796:certificate/3f30d5a3-4e52-4ed9-a1e2-fe07c0c2dc99
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}, {"HTTPS":443}]'
+    # alb.ingress.kubernetes.io/actions.ssl-redirect: '{"Type": "redirect", "RedirectConfig": { "Protocol": "HTTPS", "Port": "443", "StatusCode": "HTTP_301"}}'
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=600
+    alb.ingress.kubernetes.io/target-group-attributes: stickiness.enabled=true,stickiness.lb_cookie.duration_seconds=600
+    alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
+    alb.ingress.kubernetes.io/healthcheck-port: traffic-port
+    alb.ingress.kubernetes.io/healthcheck-path: /
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '100'
+    alb.ingress.kubernetes.io/load-balancer-name: autogpt-backend-http
+    # alb.ingress.kubernetes.io/group.name: ingressgroup-cta
+    alb.ingress.kubernetes.io/rewrite-target: "/$1"
+  labels:
+    version: "1.001"
+spec:
+  rules:
+  - host: agpt-backend.intoneapps.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 8006
+  - host: agpt-backendws.intoneapps.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 8001
+  defaultBackend:
+    service:
+      name: backend
+      port:
+        number: 8006

@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: autogpt
+  annotations:
+    kompose.cmd: C:\Program Files\Amazon\AWSCLIV2\kompose.exe convert -v -f .\docker-compose.yml
+    kompose.version: 1.35.0 (9532ceef3)
+  labels:
+    io.kompose.service: realtime
+  name: realtime
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: realtime
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: C:\Program Files\Amazon\AWSCLIV2\kompose.exe convert -v -f .\docker-compose.yml
+        kompose.version: 1.35.0 (9532ceef3)
+      labels:
+        io.kompose.service: realtime
+    spec:
+      containers:
+        - env:
+            - name: API_JWT_SECRET
+              value: your-super-secret-jwt-token-with-at-least-32-characters-long
+            - name: APP_NAME
+              value: realtime
+            - name: DB_AFTER_CONNECT_QUERY
+              value: SET search_path TO _realtime
+            - name: DB_ENC_KEY
+              value: supabaserealtime
+            - name: DB_HOST
+              value: db
+            - name: DB_NAME
+              value: postgres
+            - name: DB_PASSWORD
+              value: your-super-secret-and-long-postgres-password
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              value: supabase_admin
+            - name: DNS_NODES
+              value: ''''''
+            - name: ERL_AFLAGS
+              value: -proto_dist inet_tcp
+            - name: PORT
+              value: "4000"
+            - name: RLIMIT_NOFILE
+              value: "10000"
+            - name: SECRET_KEY_BASE
+              value: UpNVntn3cDxHJpq99YMc1T1AQgQpc8kfYTuRgBiYa15BLrx8etQoXz3gZv1/u2oq
+            - name: SEED_SELF_HOST
+              value: "true"
+          image: 582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/supbase/realtime:latest
+          livenessProbe:
+            exec:
+              command:
+                - curl
+                - -sSfL
+                - --head
+                - -o
+                - /dev/null
+                - -H
+                - 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE'
+                - http://supabase-realtime:4000/api/tenants/realtime-dev/health
+            failureThreshold: 3
+            periodSeconds: 5
+            timeoutSeconds: 5
+          name: supabase-realtime # realtime-dev.supabase-realtime
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: autogpt
+  annotations:
+    kompose.version: "1.001"
+  labels:
+    io.kompose.service: supabase-realtime
+  name: supabase-realtime
+spec:
+  ports:
+    - name: "4000"
+      port: 4000
+      targetPort: 4000
+  selector:
+    io.kompose.service: realtime

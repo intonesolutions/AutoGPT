@@ -14,6 +14,7 @@ CMD ["yarn", "run", "dev", "--hostname", "0.0.0.0"]
 
 # Build stage for prod
 FROM base AS build
+ENV NODE_ENV=eks
 COPY autogpt_platform/frontend/ .
 ENV SKIP_STORYBOOK_TESTS=true
 RUN yarn build
@@ -34,6 +35,7 @@ COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 COPY --from=build /app/public ./public
+COPY autogpt_platform/frontend/.env.eks ./.env
 
 USER nextjs
 

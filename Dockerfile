@@ -70,10 +70,12 @@ WORKDIR /app/autogpt_platform/backend
 
 FROM server_dependencies AS server
 
+
 COPY autogpt_platform/backend /app/autogpt_platform/backend
 RUN poetry install --no-ansi --only-root
 
 # ENV DATABASE_URL=""
 # ENV PORT=8000
-
+COPY autogpt_platform/backend/.env.eks /app/autogpt_platform/backend/.env
+EXPOSE 8001 8002 8003 8004 8005 8006 8007 8015
 CMD ["poetry", "run", "app"]
