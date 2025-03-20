@@ -21,8 +21,8 @@ spec:
     spec:
       containers:
         - image: 582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/platform/backend:latest
-          command: ["/bin/sh", "-c", "sleep infinity"] # poetry run app
-          #command: ["/bin/sh","-c","export $(grep -v '^#' .env | xargs) && poetry run app"]
+          #command: ["/bin/sh", "-c", "sleep infinity"] # poetry run app
+          command: ["/bin/sh","-c","export $(grep -v '^#' .env | xargs) && poetry run app"]
           name: backend
           ports:
             - containerPort: 8001

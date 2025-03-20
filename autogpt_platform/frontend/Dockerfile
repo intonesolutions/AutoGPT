@@ -35,7 +35,6 @@ COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 COPY --from=build /app/public ./public
-COPY autogpt_platform/frontend/.env.eks ./.env
 
 USER nextjs
 

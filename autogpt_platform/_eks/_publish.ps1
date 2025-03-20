@@ -180,7 +180,7 @@ kubectl apply -f .\autogpt\1-backend.yaml
 # ===================
 # on autogpt folder (just above autogpt_platform), run:
 # docker build -t autogpt-frontend -f .\autogpt_platform\frontend\Dockerfile  .
-# also make sure autogpt_platform/backend/.env.eks is configured properly as all env variables are stored there. if anything changes, rebuild the image first.
+# also make sure autogpt_platform/frontend/.env.local is configured properly as all env variables are stored there. if anything changes, rebuild the image first.
 docker tag autogpt-frontend 582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/platform/frontend
 docker push 582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/platform/frontend:latest
 kubectl apply -f .\autogpt\9-frontend.yaml
