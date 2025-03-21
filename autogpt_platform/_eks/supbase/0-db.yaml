@@ -19,17 +19,17 @@ spec:
     metadata:
       annotations:
         kompose.cmd: C:\Program Files\Amazon\AWSCLIV2\kompose.exe convert -v -f .\docker-compose.yml
-        kompose.version: 1.35.0 (9532ceef3)
+        kompose.version: 1.35.2
       labels:
         io.kompose.service: db
     spec:
       containers:
         - args:
-            - postgres
-            - -c
-            - config_file=/etc/postgresql/postgresql.conf
-            - -c
-            - log_min_messages=fatal
+            # - postgres
+            # - -c
+            # - config_file=/etc/postgresql/postgresql.conf
+            #- -c
+            #- log_min_messages=fatal
           env:
             - name: JWT_EXP
               value: "3600"
@@ -49,8 +49,9 @@ spec:
               value: your-super-secret-and-long-postgres-password
             - name: POSTGRES_PORT
               value: "5432"
-          image: 582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/supbase/db:latest
-          # command: ["/bin/sh", "-c", "sleep infinity"] # Keeps the pod running
+          image: supabase/postgres:15.1.1.78 #582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/supbase/db:latest
+          #command: ["/bin/sh", "-c", "sleep infinity"] # Keeps the pod running
+          command: ["/bin/sh","-c","chmod -R 777 /etc/postgresql-custom/ && /usr/local/bin/docker-entrypoint.sh postgres -c config_file=/etc/postgresql/postgresql.conf"]
           livenessProbe:
             exec:
               command:
@@ -63,12 +64,43 @@ spec:
             - containerPort: 5432
               protocol: TCP
           volumeMounts:
-            - mountPath: /docker-entrypoint-initdb.d/
+            - mountPath: /docker-entrypoint-initdb.d/migrations/99-realtime.sql
+              subPath:  migrations/99-realtime.sql
               name: db-claim0
+            - mountPath: /docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql
+              subPath:  init-scripts/98-webhooks.sql
+              name: db-claim0
+            - mountPath: /docker-entrypoint-initdb.d/init-scripts/99-roles.sql
+              subPath:  init-scripts/99-roles.sql
+              name: db-claim0
+            - mountPath: /docker-entrypoint-initdb.d/init-scripts/99-jwt.sql
+              subPath:  init-scripts/99-jwt.sql
+              name: db-claim0 
+            - mountPath: /docker-entrypoint-initdb.d/migrations/97-_supabase.sql
+              subPath:  migrations/97-_supabase.sql
+              name: db-claim0 
+            - mountPath: /docker-entrypoint-initdb.d/migrations/99-logs.sql
+              subPath:  migrations/99-logs.sql
+              name: db-claim0 
+            - mountPath: /docker-entrypoint-initdb.d/migrations/99-pooler.sql
+              subPath:  migrations/99-pooler.sql
+              name: db-claim0 
+            # - mountPath: /etc/postgresql/postgresql.conf
+            #   subPath:  postgresql.conf
+            #   name: db-config
             - mountPath: /var/lib/postgresql/data
               name: db-claim4
-            # - mountPath: /etc/postgresql-custom
+            # - mountPath: /etc/postgresql-custom/read-replica.conf
+            #   subPath: read-replica.conf
             #   name: db-config
+            # - mountPath: /etc/postgresql-custom/supautils.conf
+            #   subPath: supautils.conf
+            #   name: db-config
+            # - mountPath: /etc/postgresql-custom/wal-g.conf
+            #   subPath: wal-g.conf
+            #   name: db-config
+            - mountPath: /etc/postgresql-custom
+              name: db-config
       restartPolicy: Always
       volumes:
         - name: db-claim0

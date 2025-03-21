@@ -15,7 +15,7 @@ spec:
   template:
     metadata:
       annotations:
-        kompose.version: 1.35.03
+        kompose.version: 1.35.04
       labels:
         io.kompose.service: backend
     spec:

@@ -27,7 +27,7 @@ spec:
               value: k0VMxyIJF9S35f3x2uaw5IWAl6Y536O7
             - name: RABBITMQ_DEFAULT_USER
               value: rabbitmq_user_default
-          image: 582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/platform/rabbitmq:latest
+          image: rabbitmq:management
           livenessProbe:
             exec:
               command:

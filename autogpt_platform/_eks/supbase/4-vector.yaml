@@ -34,18 +34,18 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
-          image: 582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/supbase/vector:latest
-          # livenessProbe:
-          #   exec:
-          #     command:
-          #       - wget
-          #       - --no-verbose
-          #       - --tries=1
-          #       - --spider
-          #       - http://vector:9001/health
-          #   failureThreshold: 3
-          #   periodSeconds: 5
-          #   timeoutSeconds: 5
+          image: timberio/vector:0.28.1-alpine
+          livenessProbe:
+            exec:
+              command:
+                - wget
+                - --no-verbose
+                - --tries=1
+                - --spider
+                - http://vector:9001/health
+            failureThreshold: 3
+            periodSeconds: 5
+            timeoutSeconds: 5
           # command: ["/bin/sh", "-c", "sleep infinity"]
           name: supabase-vector
           volumeMounts:

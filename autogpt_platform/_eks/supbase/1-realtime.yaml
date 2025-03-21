@@ -53,7 +53,9 @@ spec:
               value: UpNVntn3cDxHJpq99YMc1T1AQgQpc8kfYTuRgBiYa15BLrx8etQoXz3gZv1/u2oq
             - name: SEED_SELF_HOST
               value: "true"
-          image: 582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/supbase/realtime:latest
+            - name: RUN_JANITOR
+              value: "true"
+          image: supabase/realtime:v2.34.40
           livenessProbe:
             exec:
               command:

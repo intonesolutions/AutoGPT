@@ -26,7 +26,7 @@ spec:
             - redis-server
             - --requirepass
             - password
-          image: 582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/platform/redis:latest
+          image: redis:latest
           livenessProbe:
             exec:
               command:

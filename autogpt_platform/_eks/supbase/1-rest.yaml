@@ -39,7 +39,7 @@ spec:
               value: "false"
             - name: PGRST_JWT_SECRET
               value: your-super-secret-jwt-token-with-at-least-32-characters-long
-          image: 582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/supbase/postgrest/postgrest:latest
+          image: postgrest/postgrest:v12.2.8
           name: supabase-rest
       restartPolicy: Always
 ---

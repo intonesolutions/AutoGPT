@@ -17,7 +17,7 @@ spec:
     metadata:
       annotations:
         kompose.cmd: C:\Program Files\Amazon\AWSCLIV2\kompose.exe convert -v -f .\docker-compose.yml
-        kompose.version: 1.35.0 (9532ceef3)
+        kompose.version: 1.35.01
       labels:
         io.kompose.service: auth
     spec:
@@ -78,7 +78,9 @@ spec:
             - name: GOTRUE_SMTP_USER
               value: fake_mail_user
             - name: GOTRUE_URI_ALLOW_LIST
-          image: 582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/supbase/gotrue:latest
+            - name: GOTRUE_EXTERNAL_SKIP_NONCE_CHECK 
+              value: "true"
+          image: supabase/gotrue:v2.170.0
           livenessProbe:
             exec:
               command:

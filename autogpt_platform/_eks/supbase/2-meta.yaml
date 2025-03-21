@@ -35,7 +35,7 @@ spec:
               value: supabase_admin
             - name: PG_META_PORT
               value: "8080"
-          image: 582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/supbase/postgres-meta:latest
+          image: supabase/postgres-meta:v0.86.1
           name: supabase-meta
       restartPolicy: Always
 ---

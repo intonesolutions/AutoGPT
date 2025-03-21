@@ -24,7 +24,7 @@ spec:
       containers:
         - env:
             - name: DB_DATABASE
-              value: postgres
+              value: _supabase
             - name: DB_HOSTNAME
               value: db
             - name: DB_PASSWORD
@@ -50,8 +50,8 @@ spec:
             - name: POSTGRES_BACKEND_SCHEMA
               value: _analytics
             - name: POSTGRES_BACKEND_URL
-              value: postgresql://supabase_admin:your-super-secret-and-long-postgres-password@db:5432/postgres
-          image: 582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/supbase/logflare:latest
+              value: postgresql://supabase_admin:your-super-secret-and-long-postgres-password@db:5432/_supabase
+          image: supabase/logflare:1.12.5
           livenessProbe:
             exec:
               command:
