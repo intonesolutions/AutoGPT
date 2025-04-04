@@ -676,7 +676,7 @@ class NotificationManager(AppService):
                 self.run_and_wait(message.reject(requeue=False))
             else:
                 logger.error(
-                    f"Error in notification service loop, message unable to be rejected, and will have to be manually removed to free space in the queue: {e}"
+                    f"Error in notification service loop, message unable to be rejected, and will have to be manually removed to free space in the queue:{queue.name} , {e}"
                 )
 
     def run_service(self):

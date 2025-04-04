@@ -31,6 +31,7 @@ export type CredentialsData =
 export default function useCredentials(
   inputFieldName: string,
 ): CredentialsData | null {
+
   const nodeId = useNodeId();
   const allProviders = useContext(CredentialsProvidersContext);
 
@@ -48,7 +49,7 @@ export default function useCredentials(
       credentialsSchema.discriminator_mapping![
         getValue(credentialsSchema.discriminator, data.hardcodedValues)
       ]) ||
-    null;
+    "openai";
 
   let providerName: CredentialsProviderName;
   if (credentialsSchema.credentials_provider.length > 1) {

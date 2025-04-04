@@ -185,6 +185,7 @@ export default function PrivatePage() {
                     }[cred.type]
                   }{" "}
                   - <code>{cred.id}</code>
+                  <div style={{wordWrap:'break-word',maxWidth:350}}>value: {(cred as any).api_key}</div>
                 </small>
               </TableCell>
               <TableCell className="w-0 whitespace-nowrap">

@@ -123,7 +123,7 @@ export const CredentialsInput: FC<{
   const [oAuthPopupController, setOAuthPopupController] =
     useState<AbortController | null>(null);
   const [oAuthError, setOAuthError] = useState<string | null>(null);
-
+  
   if (!credentials || credentials.isLoading) {
     return null;
   }
@@ -277,6 +277,7 @@ export const CredentialsInput: FC<{
   }
 
   // No saved credentials yet
+
   if (
     savedApiKeys.length === 0 &&
     savedOAuthCredentials.length === 0 &&
