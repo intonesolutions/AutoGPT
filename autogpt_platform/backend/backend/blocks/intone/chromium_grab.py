@@ -5,7 +5,7 @@ from backend.data.block import Block, BlockCategory, BlockOutput, BlockSchema
 from backend.data.model import SchemaField
 import time
 
-class ChromiumContentGrab(Block):
+class ChromiumContentGrabBlock(Block):
     class Input(BlockSchema):
         url: str = SchemaField(
             description="the url"
@@ -38,8 +38,8 @@ class ChromiumContentGrab(Block):
             id="aabbccdd-0000-1111-2222-000000000001",
             description="This block uses chromium to grab content from the internet.",
             categories={BlockCategory.DATA},
-            input_schema=ChromiumContentGrab.Input,
-            output_schema=ChromiumContentGrab.Output,
+            input_schema=ChromiumContentGrabBlock.Input,
+            output_schema=ChromiumContentGrabBlock.Output,
         )
 
     def run(
@@ -86,8 +86,8 @@ class ChromiumContentGrab(Block):
 #     sel_timeout = 10
 #     result_sel = ".ev1_-results-list"
     
-#     scraper = ChromiumContentGrab()
-#     input_args=ChromiumContentGrab.Input(url=url,selectorToWaitFor=sel,maxTimeInSec=sel_timeout,resultSelector=result_sel)
+#     scraper = ChromiumContentGrabBlock()
+#     input_args=ChromiumContentGrabBlock.Input(url=url,selectorToWaitFor=sel,maxTimeInSec=sel_timeout,resultSelector=result_sel)
 #     result = scraper.run(input_data=input_args)
 #     print("Result:", list(result))
 #     input("Press any key to close...")
