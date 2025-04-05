@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: autogpt
+  annotations:
+    kompose.cmd: C:\Program Files\Amazon\AWSCLIV2\kompose.exe convert -v -f .\docker-compose.yml
+    kompose.version: 1.35.0 (9532ceef3)
+  labels:
+    io.kompose.service: storage
+  name: storage
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: storage
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: C:\Program Files\Amazon\AWSCLIV2\kompose.exe convert -v -f .\docker-compose.yml
+        kompose.version: 1.35.0 (9532ceef3)
+      labels:
+        io.kompose.service: storage
+    spec:
+      containers:
+        - env:
+            - name: ANON_KEY
+              value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE
+            - name: DATABASE_URL
+              value: postgres://supabase_storage_admin:your-super-secret-and-long-postgres-password@db:5432/postgres
+            - name: ENABLE_IMAGE_TRANSFORMATION
+              value: "true"
+            - name: FILE_SIZE_LIMIT
+              value: "52428800"
+            - name: FILE_STORAGE_BACKEND_PATH
+              value: /var/lib/storage
+            - name: GLOBAL_S3_BUCKET
+              value: stub
+            - name: IMGPROXY_URL
+              value: http://imgproxy:5001
+            - name: PGRST_JWT_SECRET
+              value: your-super-secret-jwt-token-with-at-least-32-characters-long
+            - name: POSTGREST_URL
+              value: http://rest:3000
+            - name: REGION
+              value: stub
+            - name: SERVICE_KEY
+              value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJzZXJ2aWNlX3JvbGUiLAogICAgImlzcyI6ICJzdXBhYmFzZS1kZW1vIiwKICAgICJpYXQiOiAxNjQxNzY5MjAwLAogICAgImV4cCI6IDE3OTk1MzU2MDAKfQ.DaYlNEoUrrEn2Ig7tqibS-PHK5vgusbcbo7X36XVt4Q
+            - name: STORAGE_BACKEND
+              value: file
+            - name: TENANT_ID
+              value: stub
+          image: supabase/storage-api:v1.19.3
+          livenessProbe:
+            exec:
+              command:
+                - wget
+                - --no-verbose
+                - --tries=1
+                - --spider
+                - http://storage:5000/status
+            failureThreshold: 3
+            periodSeconds: 5
+            timeoutSeconds: 5
+          name: supabase-storage
+          volumeMounts:
+            - mountPath: /var/lib/storage
+              name: storage-claim0
+      restartPolicy: Always
+      volumes:
+        - name: storage-claim0
+          persistentVolumeClaim:
+            claimName: storage-claim0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: autogpt
+  annotations:
+    kompose.version: "1.001"
+  labels:
+    io.kompose.service: storage
+  name: storage
+spec:
+  ports:
+    - name: "5000"
+      port: 5000
+      targetPort: 5000
+  selector:
+    io.kompose.service: storage
