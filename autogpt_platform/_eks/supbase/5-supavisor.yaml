@@ -1,0 +1,152 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: autogpt
+  name: supavisor
+  annotations:
+    kompose.version: 1.35.0 (9532ceef3)
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: supavisor
+  template:
+    metadata:
+      labels:
+        app: supavisor
+    spec:
+      containers:
+        - name: supavisor
+          image: 582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/supabase/supavisor
+          ports:
+            - containerPort: 5432
+            - containerPort: 6543
+          volumeMounts:
+            - name: pooler-config
+              mountPath: /etc/pooler/pooler.exs
+              subPath: pooler.exs
+              readOnly: true
+          env:
+            - name: PORT
+              value: "4000"
+            - name: POSTGRES_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: supavisor-config
+                  key: POSTGRES_PORT
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: supavisor-config
+                  key: POSTGRES_DB
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: supavisor-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: "ecto://supabase_admin:$(POSTGRES_PASSWORD)@db:$(POSTGRES_PORT)/_supabase"
+            - name: CLUSTER_POSTGRES
+              value: "true"
+            - name: SECRET_KEY_BASE
+              valueFrom:
+                secretKeyRef:
+                  name: supavisor-secrets
+                  key: SECRET_KEY_BASE
+            - name: VAULT_ENC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: supavisor-secrets
+                  key: VAULT_ENC_KEY
+            - name: API_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supavisor-secrets
+                  key: JWT_SECRET
+            - name: METRICS_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supavisor-secrets
+                  key: JWT_SECRET
+            - name: REGION
+              value: "local"
+            - name: ERL_AFLAGS
+              value: "-proto_dist inet_tcp"
+            - name: POOLER_TENANT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: supavisor-secrets
+                  key: POOLER_TENANT_ID
+            - name: POOLER_DEFAULT_POOL_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: supavisor-config
+                  key: POOLER_DEFAULT_POOL_SIZE
+            - name: POOLER_MAX_CLIENT_CONN
+              valueFrom:
+                configMapKeyRef:
+                  name: supavisor-config
+                  key: POOLER_MAX_CLIENT_CONN
+            - name: POOLER_POOL_MODE
+              value: "transaction"
+          command:
+            ["/bin/sh", "-c", "/app/bin/migrate && /app/bin/supavisor eval \"$(cat /etc/pooler/pooler.exs)\" && /app/bin/server"]
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 4000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 4000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: pooler-config
+          configMap:
+            name: supavisor-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: supavisor-config
+  labels:
+    app: supavisor
+  namespace: default
+  data:
+    POSTGRES_PORT: "5432"
+    POSTGRES_DB: "your_database"
+    POOLER_DEFAULT_POOL_SIZE: "10"
+    POOLER_MAX_CLIENT_CONN: "100"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: supavisor-secrets
+  labels:
+    app: supavisor
+  namespace: default
+stringData:
+  POSTGRES_PASSWORD: "your_password"
+  SECRET_KEY_BASE: "your_secret_key_base"
+  VAULT_ENC_KEY: "your_vault_enc_key"
+  JWT_SECRET: "your_jwt_secret"
+  POOLER_TENANT_ID: "your_pooler_tenant_id"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supavisor-service
+spec:
+  selector:
+    app: supavisor
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+    - protocol: TCP
+      port: 6543
+      targetPort: 6543
+  type: ClusterIP

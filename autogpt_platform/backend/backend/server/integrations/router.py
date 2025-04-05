@@ -72,6 +72,8 @@ class CredentialsMetaResponse(BaseModel):
     title: str | None
     scopes: list[str] | None
     username: str | None
+    api_key: str | None
+    expires_at: str | None
 
 
 @router.post("/{provider}/callback")
@@ -154,6 +156,8 @@ def list_credentials(
             title=cred.title,
             scopes=cred.scopes if isinstance(cred, OAuth2Credentials) else None,
             username=cred.username if isinstance(cred, OAuth2Credentials) else None,
+            api_key=cred.api_key.get_secret_value() if cred.api_key is not None else None,
+            expires_at=cred.expires_at
         )
         for cred in credentials
     ]

@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: autogpt
+  name: manager
+spec:
+  containers:
+  - name: ubuntu
+    image: ubuntu
+    command: ["/bin/sh", "-c", "sleep infinity"] # Keeps the pod running
+    volumeMounts:
+      - mountPath: "/data/kong0"
+        name: kong0
+      - mountPath: "/data/function0"
+        name: function0
+      - mountPath: "/data/vector0"
+        name: vector0
+      # - mountPath: "/data/db0"
+      #   name: db0
+      # - mountPath: "/data/db4"
+      #   name: db4
+      # - mountPath: "/data/dbconfig"
+      #   name: dbconfig
+  volumes:
+    - name: vector0
+      persistentVolumeClaim:
+        claimName: vector-claim0
+    # - name: db0
+    #   persistentVolumeClaim:
+    #     claimName: db-claim0
+    # - name: db4
+    #   persistentVolumeClaim:
+    #     claimName: db-claim4
+    # - name: dbconfig
+    #   persistentVolumeClaim:
+    #     claimName: db-config
+    - name: function0
+      persistentVolumeClaim:
+        claimName: functions-claim0
+    - name: kong0
+      persistentVolumeClaim:
+        claimName: kong-claim0
+
+

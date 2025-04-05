@@ -9,3 +9,4 @@ secrets/*
 
 *.ignore.*
 *.ign.*
+requirements.txt

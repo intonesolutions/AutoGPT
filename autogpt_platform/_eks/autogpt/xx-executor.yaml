@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: autogpt
+  annotations:
+    kompose.cmd: C:\Program Files\Amazon\AWSCLIV2\kompose.exe convert -v -f .\docker-compose.yml
+    kompose.version: 1.35.0 (9532ceef3)
+  labels:
+    io.kompose.service: executor
+  name: executor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: executor
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: C:\Program Files\Amazon\AWSCLIV2\kompose.exe convert -v -f .\docker-compose.yml
+        kompose.version: 1.35.0 (9532ceef3)
+      labels:
+        io.kompose.service: executor
+    spec:
+      containers:
+        - args:
+            - python
+            - -m
+            - backend.exec
+          env:
+            - name: AGENTSERVER_HOST
+              value: rest-server
+            - name: DATABASE_URL
+              value: postgresql://postgres:your-super-secret-and-long-postgres-password@db:5432/postgres?connect_timeout=60&schema=platform
+            - name: ENABLE_AUTH
+              value: "true"
+            - name: ENCRYPTION_KEY
+              value: dvziYgz0KSK8FENhju0ZYi8-fRTfAdlz6YLhdB_jhNw=
+            - name: NOTIFICATIONMANAGER_HOST
+              value: rest-server
+            - name: PYRO_HOST
+              value: 0.0.0.0
+            - name: RABBITMQ_DEFAULT_PASS
+              value: k0VMxyIJF9S35f3x2uaw5IWAl6Y536O7
+            - name: RABBITMQ_DEFAULT_USER
+              value: rabbitmq_user_default
+            - name: RABBITMQ_HOST
+              value: rabbitmq
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: REDIS_HOST
+              value: redis
+            - name: REDIS_PASSWORD
+              value: password
+            - name: REDIS_PORT
+              value: "6379"
+            - name: SUPABASE_JWT_SECRET
+              value: your-super-secret-jwt-token-with-at-least-32-characters-long
+            - name: SUPABASE_SERVICE_ROLE_KEY
+              value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJzZXJ2aWNlX3JvbGUiLAogICAgImlzcyI6ICJzdXBhYmFzZS1kZW1vIiwKICAgICJpYXQiOiAxNjQxNzY5MjAwLAogICAgImV4cCI6IDE3OTk1MzU2MDAKfQ.DaYlNEoUrrEn2Ig7tqibS-PHK5vgusbcbo7X36XVt4Q
+            - name: SUPABASE_URL
+              value: http://kong:8000
+            - name: WEBSOCKET_SERVER_HOST
+              value: websocket-server
+            - name: WEBSOCKET_SERVER_PORT
+              value: "8001"
+          image: 582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/platform/executor:latest
+          command: ["/bin/sh", "-c", "sleep infinity"]
+          name: executor
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: autogpt
+  annotations:
+    kompose.cmd: C:\Program Files\Amazon\AWSCLIV2\kompose.exe convert -v -f .\docker-compose.yml
+    kompose.version: 1.35.0 (9532ceef3)
+  labels:
+    io.kompose.service: executor
+  name: executor
+spec:
+  ports:
+    - name: "8002"
+      port: 8002
+      targetPort: 8000
+  selector:
+    io.kompose.service: executor
