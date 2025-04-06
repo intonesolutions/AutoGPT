@@ -75,7 +75,7 @@ FROM server_dependencies AS server
 COPY autogpt_platform/backend /app/autogpt_platform/backend
 RUN poetry install --no-ansi --only-root
 
-
+RUN playwright install --with-deps chromium
 
 # ENV DATABASE_URL=""
 # ENV PORT=8000

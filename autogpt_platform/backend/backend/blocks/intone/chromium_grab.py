@@ -46,22 +46,27 @@ class ChromiumContentGrabBlock(Block):
         self, input_data: Input, **kwargs
     ) -> BlockOutput:
         try:
+            stdout_logs=""
             url = input_data.url
             sel=input_data.selectorToWaitFor
             sel_timeout=input_data.maxTimeInSec
             result_sel=input_data.resultSelector
             print(f"starting on url: {url}")
+            stdout_logs +=f"starting on url: {url}\r\n"
             with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
+                browser = p.chromium.launch(headless=False)
                 print("browser created")
+                stdout_logs+="browser created\r\n"
                 page = browser.new_page()
                 # Step 1-2: Load the page and wait
                 print ("page created")
+                stdout_logs+="page created\r\n"
                 page.goto(url, wait_until="load")
 
                 # Step 3: Wait additional sec
                 time.sleep(1.0)
                 print("adding jq injection")
+                stdout_logs+="adding jq injection\r\n"
                 # Step 4: Inject jQuery from CDN
                 jquery_url = "https://code.jquery.com/jquery-3.6.0.min.js"
                 page.add_script_tag(url=jquery_url)
@@ -71,6 +76,7 @@ class ChromiumContentGrabBlock(Block):
 
                 # Step 6: Poll for `sel` using jQuery until found or timeout
                 print("running selection jq")
+                stdout_logs+="running selection jq\r\n"
                 if not self.wait_for_jquery_selector(page=page,sel=sel,sel_timeout_sec=sel_timeout):
                     browser.close()
                     return None
@@ -78,10 +84,12 @@ class ChromiumContentGrabBlock(Block):
                 # Step 7: Query `resultSel` and return its text if found
                 print("eval selection jq")
                 text = page.evaluate(f'() => jQuery("{result_sel}").first().text() || null')
+                stdout_logs+=f"eval text: {text}"
                 html=page.evaluate(f'() => jQuery("{result_sel}").first().html() || null')
                 browser.close()
-                yield "contentText", text
-                yield "contentHtml", html
+                yield "stdout_logs",stdout_logs
+                yield "content Text", text
+                yield "content Html", html
         except Exception as e:
             print(f"Intone Chromium Grab block: An error occurred: {e}")
 
