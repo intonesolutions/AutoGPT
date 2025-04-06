@@ -122,7 +122,7 @@ class SendEmailBlock(Block):
             msg.attach(MIMEMultipart(bodyHtml,"html"))
 
         with smtplib.SMTP(smtp_server, smtp_port) as server:
-            # server.starttls()
+            server.starttls()
             server.helo()
             server.login(smtp_username, smtp_password)
             server.sendmail(smtp_username, to_email, msg.as_string())
