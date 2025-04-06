@@ -17,12 +17,13 @@ class ChromiumContentGrabBlock(Block):
         resultSelector: str=SchemaField(description="the selector for the result content")
 
     class Output(BlockSchema):
-        contentText: str = SchemaField(
+        content_text: str = SchemaField(
             description="The content of the page in text (striped from any html)"
         )
-        contentHtml: str = SchemaField(
+        content_html: str = SchemaField(
             description="The content of the page in html"
         )
+        stdout_logs: str=SchemaField(description="std out",title="stdout logs")
     def wait_for_jquery_selector(self,page:any, sel:str, sel_timeout_sec:float):
         start = time.time()
         while True:
@@ -88,8 +89,8 @@ class ChromiumContentGrabBlock(Block):
                 html=page.evaluate(f'() => jQuery("{result_sel}").first().html() || null')
                 browser.close()
                 yield "stdout_logs",stdout_logs
-                yield "content Text", text
-                yield "content Html", html
+                yield "content_text", text
+                yield "content_html", html
         except Exception as e:
             print(f"Intone Chromium Grab block: An error occurred: {e}")
 

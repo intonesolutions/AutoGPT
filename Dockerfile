@@ -32,7 +32,6 @@ COPY autogpt_platform/autogpt_libs /app/autogpt_platform/autogpt_libs
 COPY autogpt_platform/backend/poetry.lock autogpt_platform/backend/pyproject.toml /app/autogpt_platform/backend/
 WORKDIR /app/autogpt_platform/backend
 RUN poetry install --no-ansi --no-root
-RUN poetry run playwright install chromium
 
 # Generate Prisma client
 COPY autogpt_platform/backend/schema.prisma ./
