@@ -59,7 +59,10 @@ class SendEmailBlock(Block):
             description="Subject of the email", placeholder="Enter the email subject"
         )
         body: str = SchemaField(
-            description="Body of the email", placeholder="Enter the email body"
+            description="Body of the email in text", placeholder="Enter the email body"
+        )
+        bodyHtml: str = SchemaField(
+            description="Body of the email in html", placeholder="Enter the email body"
         )
         config: SMTPConfig = SchemaField(
             description="SMTP Config",
@@ -101,6 +104,7 @@ class SendEmailBlock(Block):
         to_email: str,
         subject: str,
         body: str,
+        bodyHtml:str,
         credentials: SMTPCredentials,
     ) -> str:
         smtp_server = config.smtp_server
@@ -112,10 +116,14 @@ class SendEmailBlock(Block):
         msg["From"] = smtp_username
         msg["To"] = to_email
         msg["Subject"] = subject
-        msg.attach(MIMEText(body, "plain"))
+        if body:
+            msg.attach(MIMEText(body, "plain"))
+        if bodyHtml:
+            msg.attach(MIMEMultipart(bodyHtml,"html"))
 
         with smtplib.SMTP(smtp_server, smtp_port) as server:
-            server.starttls()
+            # server.starttls()
+            server.helo()
             server.login(smtp_username, smtp_password)
             server.sendmail(smtp_username, to_email, msg.as_string())
 
@@ -129,5 +137,6 @@ class SendEmailBlock(Block):
             to_email=input_data.to_email,
             subject=input_data.subject,
             body=input_data.body,
+            bodyHtml=input_data.bodyHtml,
             credentials=credentials,
         )
