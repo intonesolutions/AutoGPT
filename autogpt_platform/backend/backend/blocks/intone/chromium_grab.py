@@ -17,13 +17,10 @@ class ChromiumContentGrabBlock(Block):
         resultSelector: str=SchemaField(description="the selector for the result content")
 
     class Output(BlockSchema):
-        content_text: str = SchemaField(
-            description="The content of the page in text (striped from any html)"
-        )
-        content_html: str = SchemaField(
-            description="The content of the page in html"
-        )
+        content_text: str = SchemaField(description="The content of the page in text (striped from any html)")
+        content_html: str = SchemaField(description="The content of the page in html")
         stdout_logs: str=SchemaField(description="std out",title="stdout logs")
+        screenshot: str=SchemaField(description="browser screenshot")
     def wait_for_jquery_selector(self,page:any, sel:str, sel_timeout_sec:float):
         start = time.time()
         while True:
@@ -55,10 +52,34 @@ class ChromiumContentGrabBlock(Block):
             print(f"starting on url: {url}")
             stdout_logs +=f"starting on url: {url}\r\n"
             with sync_playwright() as p:
-                browser = p.chromium.launch(headless=False)
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context(
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                            "(KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36",
+                    viewport={'width': 400, 'height': 200},
+                    java_script_enabled=True,
+                    ignore_https_errors=True,
+                )
                 print("browser created")
                 stdout_logs+="browser created\r\n"
-                page = browser.new_page()
+                page = context.new_page()
+                # 🧙 Inject stealth tricks
+                page.add_init_script("""
+                    // Remove navigator.webdriver
+                    Object.defineProperty(navigator, 'webdriver', {
+                        get: () => undefined
+                    });
+
+                    // Spoof plugins
+                    Object.defineProperty(navigator, 'plugins', {
+                        get: () => [1, 2, 3]
+                    });
+
+                    // Spoof languages
+                    Object.defineProperty(navigator, 'languages', {
+                        get: () => ['en-US', 'en']
+                    });
+                """)
                 # Step 1-2: Load the page and wait
                 print ("page created")
                 stdout_logs+="page created\r\n"
@@ -79,31 +100,37 @@ class ChromiumContentGrabBlock(Block):
                 print("running selection jq")
                 stdout_logs+="running selection jq\r\n"
                 if not self.wait_for_jquery_selector(page=page,sel=sel,sel_timeout_sec=sel_timeout):
-                    browser.close()
-                    return None
+                    print("waiting expired")
+                    #browser.close()
+                    #return None
 
                 # Step 7: Query `resultSel` and return its text if found
                 print("eval selection jq")
                 text = page.evaluate(f'() => jQuery("{result_sel}").first().text() || null')
                 stdout_logs+=f"eval text: {text}"
                 html=page.evaluate(f'() => jQuery("{result_sel}").first().html() || null')
+                screenshot_bytes = page.screenshot()
+                import base64
+                data_url = "data:image/png;base64," + base64.b64encode(screenshot_bytes).decode()
+
                 browser.close()
                 yield "stdout_logs",stdout_logs
                 yield "content_text", text
                 yield "content_html", html
+                yield "screenshot",data_url
         except Exception as e:
             print(f"Intone Chromium Grab block: An error occurred: {e}")
 
 # for testing
-# if __name__ == "__main__":
+if __name__ == "__main__":
     
-#     url = "https://www.kayak.ae/flights/CAI-YYZ/2025-06-28/2025-10-10/business/2adults?ucs=1oezqmi&sort=price_a&fs=stops=-2&attempt=1&lastms=1743751829186"
-#     sel = ".e_0j-results-count"
-#     sel_timeout = 10
-#     result_sel = ".ev1_-results-list"
+    url = "https://www.kayak.ae/flights/CAI-YYZ/2025-06-28/2025-10-10/business/2adults?ucs=1oezqmi&sort=price_a&fs=stops=-2&attempt=1&lastms=1743751829186"
+    sel = ".e_0j-results-count"
+    sel_timeout = 10
+    result_sel = ".ev1_-results-list"
     
-#     scraper = ChromiumContentGrabBlock()
-#     input_args=ChromiumContentGrabBlock.Input(url=url,selectorToWaitFor=sel,maxTimeInSec=sel_timeout,resultSelector=result_sel)
-#     result = scraper.run(input_data=input_args)
-#     print("Result:", list(result))
-#     input("Press any key to close...")
+    scraper = ChromiumContentGrabBlock()
+    input_args=ChromiumContentGrabBlock.Input(url=url,selectorToWaitFor=sel,maxTimeInSec=sel_timeout,resultSelector=result_sel)
+    result = scraper.run(input_data=input_args)
+    print("Result:", list(result))
+    input("Press any key to close...")
