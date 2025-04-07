@@ -35,9 +35,8 @@ jobs:
 
       - name: Build Docker image
         run: |
-          cd autogpt_platform/frontend
           mv -f .env.eks .env.local
-          docker build -t $IMAGE_NAME .
+          docker build -t $IMAGE_NAME autogpt_platform/frontend
 
       - name: Tag Docker image
         run: docker tag $IMAGE_NAME:latest $ECR_REGISTRY/$ECR_REPO:latest
