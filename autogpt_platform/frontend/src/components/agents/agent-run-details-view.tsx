@@ -1,12 +1,13 @@
 "use client";
 import React, { useCallback, useMemo } from "react";
+import { useParams, useRouter } from "next/navigation";
 import moment from "moment";
 
 import { useBackendAPI } from "@/lib/autogpt-server-api/context";
 import {
   GraphExecution,
   GraphExecutionMeta,
-  GraphMeta,
+  GraphMeta,LibraryAgent
 } from "@/lib/autogpt-server-api";
 
 import type { ButtonAction } from "@/components/agptui/types";
@@ -24,15 +25,17 @@ export default function AgentRunDetailsView({
   graph,
   run,
   agentActions,
+  agent,
   deleteRun,
 }: {
   graph: GraphMeta;
   run: GraphExecution | GraphExecutionMeta;
   agentActions: ButtonAction[];
+  agent:LibraryAgent;
   deleteRun: () => void;
 }): React.ReactNode {
   const api = useBackendAPI();
-
+  const router = useRouter();
   const runStatus: AgentRunStatus = useMemo(
     () => agentRunStatusMap[run.status],
     [run],
@@ -147,6 +150,9 @@ export default function AgentRunDetailsView({
           ]
         : []),
       { label: "Delete run", variant: "secondary", callback: deleteRun },
+      { label: "View run in Builder", variant: "secondary", callback: () =>
+          router.push(`/build?flowID=${agent.agent_id}&flowVersion=${agent.agent_version}&flowExecutionID=${run.execution_id}`,)
+      },
     ],
     [runStatus, runAgain, stopRun, deleteRun],
   );
@@ -160,6 +166,9 @@ export default function AgentRunDetailsView({
           </CardHeader>
 
           <CardContent>
+            <div>
+              Run id: {run.execution_id}
+            </div>
             <div className="flex justify-stretch gap-4">
               {infoStats.map(({ label, value }) => (
                 <div key={label} className="flex-1">

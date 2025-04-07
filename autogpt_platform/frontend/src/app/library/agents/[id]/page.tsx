@@ -267,6 +267,7 @@ export default function AgentRunsPage(): React.ReactElement {
               graph={graphVersions[selectedRun.graph_version] ?? graph}
               run={selectedRun}
               agentActions={agentActions}
+              agent={agent}
               deleteRun={() => setConfirmingDeleteAgentRun(selectedRun)}
             />
           )
