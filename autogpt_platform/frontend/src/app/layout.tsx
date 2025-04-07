@@ -71,6 +71,11 @@ export default async function RootLayout({
                     name: "Build",
                     href: "/build",
                   },
+                  ,
+                  {
+                    name: "Monitoring",
+                    href: "/monitoring",
+                  },
                 ]}
                 menuItemGroups={[
                   {
