@@ -46,7 +46,7 @@ class IntoneSendEmailBlock(Block):
             description="SMTP Config",
             default=SMTPConfig(),
         )
-        #credentials: SMTPCredentialsInput = SMTPCredentialsField()
+        credentials: SMTPCredentialsInput = SMTPCredentialsField()
 
     class Output(BlockSchema):
         status: str = SchemaField(description="Status of the email sending operation")
