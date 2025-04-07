@@ -104,30 +104,29 @@ class IntoneSendEmailBlock(Block):
         return "Email sent successfully"
 
     def run(
-        self, input_data: Input, *, credentials: SMTPCredentials, **kwargs
+        self, input_data: Input, **kwargs
     ) -> BlockOutput:
         yield "status", self.send_email(
             config=input_data.config,
             to_email=input_data.to_email,
             subject=input_data.subject,
             body=input_data.body,
-            bodyHtml=input_data.bodyHtml,
-            credentials=credentials,
+            bodyHtml=input_data.bodyHtml
         )
 
 # for testing
-if __name__ == "__main__":
-    config=SMTPConfig(smtp_server="mail.intone.ca",smtp_port=25)
+# if __name__ == "__main__":
+#     config=SMTPConfig(smtp_server="mail.intone.ca",smtp_port=25)
     
     
-    smtp = IntoneSendEmailBlock()
-    input_args=IntoneSendEmailBlock.Input(config=config,to_email="ts@intone.ca",subject="test",body="text",
-                                          bodyHtml="<body style='background-color:yellow'>html</body>")
-    result = smtp.run(input_data=input_args,credentials=SMTPCredentials(
-                                              username=SecretStr("tshazli@intonesolutions.com"),
-                                              password=SecretStr( "2B3F0rG0od"),
-                                              provider="smtp",
-                                              title="intone"
-										  ))
-    print("Result:", list(result))
-    input("Press any key to close...")
+#     smtp = IntoneSendEmailBlock()
+#     input_args=IntoneSendEmailBlock.Input(config=config,to_email="ts@intone.ca",subject="test",body="text",
+#                                           bodyHtml="<body style='background-color:yellow'>html</body>")
+#     result = smtp.run(input_data=input_args,credentials=SMTPCredentials(
+#                                               username=SecretStr("tshazli@intonesolutions.com"),
+#                                               password=SecretStr( "2B3F0rG0od"),
+#                                               provider="smtp",
+#                                               title="intone"
+# 										  ))
+#     print("Result:", list(result))
+#     input("Press any key to close...")
