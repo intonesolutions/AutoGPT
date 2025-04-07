@@ -13,7 +13,15 @@ from backend.data.model import (
     UserPasswordCredentials,
 )
 from backend.integrations.providers import ProviderName
-from backend.blocks.email_block import SMTPConfig
+
+class SMTPConfig(BaseModel):
+    smtp_server: str = SchemaField(default="mail.intone.ca", description="SMTP server address")
+    smtp_port: int = SchemaField(default=25, description="SMTP port number")
+    auth_username: str = SchemaField(description="username for SMTP auth")
+    auth_password: str = SchemaField(description="password for SMTP auth")
+    
+    model_config = ConfigDict(title="SMTP Config")
+
 
 SMTPCredentials = UserPasswordCredentials
 SMTPCredentialsInput = CredentialsMetaInput[
@@ -40,13 +48,13 @@ class IntoneSendEmailBlock(Block):
             description="Body of the email in text", placeholder="Enter the email body"
         )
         bodyHtml: str = SchemaField(
-            description="Body of the email in html", placeholder="Enter the email body"
+            description="Body of the email in html", placeholder="Enter the email body",
         )
         config: SMTPConfig = SchemaField(
             description="SMTP Config",
             default=SMTPConfig(),
         )
-        credentials: SMTPCredentialsInput = SMTPCredentialsField()
+        
 
     class Output(BlockSchema):
         status: str = SchemaField(description="Status of the email sending operation")
@@ -69,13 +77,12 @@ class IntoneSendEmailBlock(Block):
         to_email: str,
         subject: str,
         body: str,
-        bodyHtml:str,
-        credentials: SMTPCredentials
+        bodyHtml:str
     ) -> str:
         smtp_server = config.smtp_server
         smtp_port = config.smtp_port
-        smtp_username = credentials.username.get_secret_value()
-        smtp_password = credentials.password.get_secret_value()
+        smtp_username = config.auth_username
+        smtp_password = config.auth_password
 
         msg = MIMEMultipart()
         msg["From"] = smtp_username
