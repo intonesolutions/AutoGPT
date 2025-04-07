@@ -13,21 +13,8 @@ from backend.data.model import (
     UserPasswordCredentials,
 )
 from backend.integrations.providers import ProviderName
+from backend.blocks.email_block import SMTPConfig
 
-TEST_CREDENTIALS = UserPasswordCredentials(
-    id="01234567-89ab-cdef-0123-456789abcdef",
-    provider="smtp",
-    username=SecretStr("mock-smtp-username"),
-    password=SecretStr("mock-smtp-password"),
-    title="Mock SMTP credentials",
-)
-
-TEST_CREDENTIALS_INPUT = {
-    "provider": TEST_CREDENTIALS.provider,
-    "id": TEST_CREDENTIALS.id,
-    "type": TEST_CREDENTIALS.type,
-    "title": TEST_CREDENTIALS.title,
-}
 SMTPCredentials = UserPasswordCredentials
 SMTPCredentialsInput = CredentialsMetaInput[
     Literal[ProviderName.SMTP],
@@ -41,16 +28,7 @@ def SMTPCredentialsField() -> SMTPCredentialsInput:
     )
 
 
-class SMTPConfig(BaseModel):
-    smtp_server: str = SchemaField(
-        default="smtp.example.com", description="SMTP server address"
-    )
-    smtp_port: int = SchemaField(default=25, description="SMTP port number")
-
-    model_config = ConfigDict(title="SMTP Config")
-
-
-class SendEmailBlock(Block):
+class IntoneSendEmailBlock(Block):
     class Input(BlockSchema):
         to_email: str = SchemaField(
             description="Recipient email address", placeholder="recipient@example.com"
@@ -59,13 +37,16 @@ class SendEmailBlock(Block):
             description="Subject of the email", placeholder="Enter the email subject"
         )
         body: str = SchemaField(
-            description="Body of the email", placeholder="Enter the email body"
+            description="Body of the email in text", placeholder="Enter the email body"
+        )
+        bodyHtml: str = SchemaField(
+            description="Body of the email in html", placeholder="Enter the email body"
         )
         config: SMTPConfig = SchemaField(
             description="SMTP Config",
             default=SMTPConfig(),
         )
-        credentials: SMTPCredentialsInput = SMTPCredentialsField()
+        #credentials: SMTPCredentialsInput = SMTPCredentialsField()
 
     class Output(BlockSchema):
         status: str = SchemaField(description="Status of the email sending operation")
@@ -75,24 +56,11 @@ class SendEmailBlock(Block):
 
     def __init__(self):
         super().__init__(
-            id="4335878a-394e-4e67-adf2-919877ff49ae",
-            description="This block sends an email using the provided SMTP credentials.",
+            id="aabbccdd-0000-1111-2222-000000000002",
+            description="This block sends a text/html email using SMTP.",
             categories={BlockCategory.OUTPUT},
-            input_schema=SendEmailBlock.Input,
-            output_schema=SendEmailBlock.Output,
-            test_input={
-                "to_email": "recipient@example.com",
-                "subject": "Test Email",
-                "body": "This is a test email.",
-                "config": {
-                    "smtp_server": "smtp.gmail.com",
-                    "smtp_port": 25,
-                },
-                "credentials": TEST_CREDENTIALS_INPUT,
-            },
-            test_credentials=TEST_CREDENTIALS,
-            test_output=[("status", "Email sent successfully")],
-            test_mock={"send_email": lambda *args, **kwargs: "Email sent successfully"},
+            input_schema=IntoneSendEmailBlock.Input,
+            output_schema=IntoneSendEmailBlock.Output,
         )
 
     @staticmethod
@@ -101,7 +69,8 @@ class SendEmailBlock(Block):
         to_email: str,
         subject: str,
         body: str,
-        credentials: SMTPCredentials,
+        bodyHtml:str,
+        credentials: SMTPCredentials
     ) -> str:
         smtp_server = config.smtp_server
         smtp_port = config.smtp_port
@@ -112,13 +81,19 @@ class SendEmailBlock(Block):
         msg["From"] = smtp_username
         msg["To"] = to_email
         msg["Subject"] = subject
-        msg.attach(MIMEText(body, "plain"))
-
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
-            server.starttls()
+        if body:
+            msg.attach(MIMEText(body, "plain"))
+        if bodyHtml:
+            msg.attach(MIMEText(bodyHtml,"html"))
+        try:
+            server=smtplib.SMTP(smtp_server, smtp_port)
+            #server.starttls()
+            server.ehlo()
             server.login(smtp_username, smtp_password)
             server.sendmail(smtp_username, to_email, msg.as_string())
-
+        except Exception as e:
+            return f"error: {e}"
+		
         return "Email sent successfully"
 
     def run(
@@ -129,5 +104,23 @@ class SendEmailBlock(Block):
             to_email=input_data.to_email,
             subject=input_data.subject,
             body=input_data.body,
+            bodyHtml=input_data.bodyHtml,
             credentials=credentials,
         )
+
+# for testing
+if __name__ == "__main__":
+    config=SMTPConfig(smtp_server="mail.intone.ca",smtp_port=25)
+    
+    
+    smtp = IntoneSendEmailBlock()
+    input_args=IntoneSendEmailBlock.Input(config=config,to_email="ts@intone.ca",subject="test",body="text",
+                                          bodyHtml="<body style='background-color:yellow'>html</body>")
+    result = smtp.run(input_data=input_args,credentials=SMTPCredentials(
+                                              username=SecretStr("tshazli@intonesolutions.com"),
+                                              password=SecretStr( "2B3F0rG0od"),
+                                              provider="smtp",
+                                              title="intone"
+										  ))
+    print("Result:", list(result))
+    input("Press any key to close...")
