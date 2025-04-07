@@ -15,12 +15,17 @@ spec:
   template:
     metadata:
       annotations:
-        kompose.version: 1.35.07
+        kompose.version: 1.35.15
       labels:
         io.kompose.service: backend
     spec:
       containers:
         - image: 582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/platform/backend:latest
+          resources:
+            requests:
+              memory: "4Gi"
+            # limits:
+            #   memory: "2Gi"
           #command: ["/bin/sh", "-c", "sleep infinity"] # poetry run app
           command: ["/bin/sh","-c","export $(grep -v '^#' .env | xargs) && poetry run app"]
           name: backend

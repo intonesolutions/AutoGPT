@@ -50,6 +50,9 @@ jobs:
       - name: Set up Kubeconfig
         run: |
           aws eks update-kubeconfig --region $AWS_REGION --name intone-03
+      
+      - name: delete backend pod
+        run: kubectl get pods -n autogpt --no-headers -o custom-columns=":metadata.name" | grep '^backend' | xargs -r kubectl delete pod -n autogpt
 
       - name: Deploy to EKS
-        run: kubectl apply -f autogpt_platform/eks/autogpt/1-backend.yaml
+        run: kubectl apply -f autogpt_platform/_eks/autogpt/1-backend.yaml
