@@ -17,8 +17,8 @@ from backend.integrations.providers import ProviderName
 class SMTPConfig(BaseModel):
     smtp_server: str = SchemaField(default="mail.intone.ca", description="SMTP server address")
     smtp_port: int = SchemaField(default=25, description="SMTP port number")
-    auth_username: str = SchemaField(description="username for SMTP auth")
-    auth_password: str = SchemaField(description="password for SMTP auth")
+    auth_username: str = SchemaField(description="username for SMTP auth",default="user@domain")
+    auth_password: str = SchemaField(description="password for SMTP auth",default="password")
     
     model_config = ConfigDict(title="SMTP Config")
 
