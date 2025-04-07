@@ -1,0 +1,62 @@
+name: _intone Deploy Frontend to EKS
+
+# on:
+#   push:
+#     branches: [main]
+on:
+  push:
+    branches: [intone/eks]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: us-east-1
+      ECR_REGISTRY: 582822331796.dkr.ecr.us-east-1.amazonaws.com
+      IMAGE_NAME: autogpt-frontend
+      ECR_REPO: autogpt/platform/frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+
+      - name: Build Docker image
+        run: |
+          mv -f autogpt_platform/frontend/.env.eks autogpt_platform/frontend/.env.local
+          docker build -t $IMAGE_NAME -f autogpt_platform/frontend/Dockerfile .
+
+      - name: Tag Docker image
+        run: docker tag $IMAGE_NAME:latest $ECR_REGISTRY/$ECR_REPO:latest
+
+      - name: Push Docker image to ECR
+        run: |
+          export DOCKER_CLIENT_TIMEOUT=600
+          docker push $ECR_REGISTRY/$ECR_REPO:latest
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Set up Kubeconfig
+        run: |
+          aws eks update-kubeconfig --region $AWS_REGION --name intone-03
+      
+      - name: delete frontend pod
+        run: kubectl get pods -n autogpt --no-headers -o custom-columns=":metadata.name" | grep '^frontend' | xargs -r kubectl delete pod -n autogpt
+
+      - name: Deploy to EKS
+        run: kubectl apply -f autogpt_platform/_eks/autogpt/9-frontend.yaml
