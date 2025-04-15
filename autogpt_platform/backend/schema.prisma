@@ -325,8 +325,18 @@ model AgentGraphExecution {
   AgentPreset   AgentPreset? @relation(fields: [agentPresetId], references: [id])
   agentPresetId String?
 
+  // holds variable information and values for this run
+  variables Json?
+
   @@index([agentGraphId, agentGraphVersion])
   @@index([userId])
+}
+
+// * New: by Intone -- 
+// hold persistent variable data across runs
+model AgentPersistentVarData {
+  agentGraphId      String @id
+  variables Json?
 }
 
 // This model describes the execution of an AgentNode.

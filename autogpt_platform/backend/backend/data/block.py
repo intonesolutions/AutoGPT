@@ -1,4 +1,6 @@
 import inspect
+import copy
+import re
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import (
@@ -22,7 +24,7 @@ from pydantic import BaseModel
 from backend.data.model import NodeExecutionStats
 from backend.util import json
 from backend.util.settings import Config
-
+from prisma.models import (AgentGraphExecution,AgentPersistentVarData)
 from .model import (
     ContributorDetails,
     Credentials,
@@ -77,6 +79,19 @@ class BlockCategory(Enum):
     def dict(self) -> dict[str, str]:
         return {"category": self.name, "description": self.value}
 
+class VariableType(Enum):
+    STRING="string"
+    NUMERIC="number"
+    BOOL="bool"
+    OBJECT="object"
+    DICTIONARY="dict"
+    ARRAY="array"
+
+class Variable:
+    VarName: str
+    VarType: VariableType
+    VarValue: object
+    Persistent: bool
 
 class BlockSchema(BaseModel):
     cached_jsonschema: ClassVar[dict[str, Any]]
@@ -439,7 +454,44 @@ class Block(ABC, Generic[BlockSchemaInputType, BlockSchemaOutputType]):
             "uiType": self.block_type.value,
         }
 
-    def execute(self, input_data: BlockInput, **kwargs) -> BlockOutput:
+    def execute(self,input_data:BlockInput,**kwargs) ->BlockOutput:
+        # retreive variables within the context of this execution here
+        # then process the input data so any reference to {{variable_name}} is replaced with the value of the variable
+        graph_exec_id=kwargs['graph_exec_id']
+        agent_exec:AgentGraphExecution| None=AgentGraphExecution().prisma().find_first(where={"id":graph_exec_id})
+        agent_persvars:AgentPersistentVarData| None=AgentPersistentVarData().prisma().find_first(where={"agentGraphId":graph_exec_id})
+        vars=agent_exec.variables
+        if agent_persvars:
+            pvars=agent_exec.variables
+            if not vars:
+                vars=pvars
+            else:
+                vars=vars | pvars
+        
+        def replace_vars(data: dict[str, any], vars: list[Variable]) -> dict[str, any]:
+            var_map = {v.VarName: str(v.VarValue) for v in vars}
+            pattern = re.compile(r"\{\{(\w+)\}\}")
+
+            def recurse(value):
+                if isinstance(value, str):
+                    return pattern.sub(lambda m: var_map.get(m.group(1), m.group(0)), value)
+                elif isinstance(value, dict):
+                    return {k: recurse(v) for k, v in value.items()}
+                elif isinstance(value, list):
+                    return [recurse(v) for v in value]
+                else:
+                    return value
+
+            return recurse(copy.deepcopy(input_data))
+        if vars:
+            input_data=replace_vars(input_data,vars)
+
+        for output_name, output_data in self._execute(input_data,**kwargs):
+            if vars:
+                output_data=replace_vars(output_data,vars)
+            yield output_name, output_data
+        
+    def _execute(self, input_data: BlockInput, **kwargs) -> BlockOutput:
         if error := self.input_schema.validate_data(input_data):
             raise ValueError(
                 f"Unable to execute block with invalid input data: {error}"
