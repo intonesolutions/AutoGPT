@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import prisma.enums
 import prisma.errors
 import prisma.models
 import pytest
@@ -80,7 +81,7 @@ async def test_get_library_agents(mocker):
     assert result.pagination.page_size == 50
 
 
-@pytest.mark.asyncio(scope="session")
+@pytest.mark.asyncio(loop_scope="session")
 async def test_add_agent_to_library(mocker):
     await connect()
     # Mock data
@@ -91,7 +92,6 @@ async def test_add_agent_to_library(mocker):
         updatedAt=datetime.now(),
         agentId="agent1",
         agentVersion=1,
-        slug="test-agent",
         name="Test Agent",
         subHeading="Test Agent Subheading",
         imageUrls=["https://example.com/image.jpg"],
@@ -100,7 +100,8 @@ async def test_add_agent_to_library(mocker):
         isFeatured=False,
         isDeleted=False,
         isAvailable=True,
-        isApproved=True,
+        storeListingId="listing123",
+        submissionStatus=prisma.enums.SubmissionStatus.APPROVED,
         Agent=prisma.models.AgentGraph(
             id="agent1",
             version=1,
@@ -164,7 +165,7 @@ async def test_add_agent_to_library(mocker):
     )
 
 
-@pytest.mark.asyncio(scope="session")
+@pytest.mark.asyncio(loop_scope="session")
 async def test_add_agent_to_library_not_found(mocker):
     await connect()
     # Mock prisma calls
