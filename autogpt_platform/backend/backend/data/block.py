@@ -15,7 +15,7 @@ from typing import (
     cast,
     get_origin,
 )
-
+from types import SimpleNamespace
 import jsonref
 import jsonschema
 from prisma.models import AgentBlock
@@ -27,12 +27,14 @@ from backend.integrations.providers import ProviderName
 from backend.util import json
 from backend.util.settings import Config
 from prisma.models import (AgentGraphExecution,AgentPersistentVarData)
+from prisma import Prisma
 from .model import (
     ContributorDetails,
     Credentials,
     CredentialsMetaInput,
     is_credentials_field_name,
 )
+import asyncio
 
 if TYPE_CHECKING:
     from .graph import Link
@@ -44,6 +46,35 @@ BlockInput = dict[str, Any]  # Input: 1 input pin consumes 1 data.
 BlockOutput = Generator[BlockData, None, None]  # Output: 1 output pin produces n data.
 CompletedBlockOutput = dict[str, list[Any]]  # Completed stream, collected as a dict.
 
+async def get_graph_execution(
+    user_id: str,
+    execution_id: str,
+    include_node_executions: bool = False,
+) -> AgentGraphExecution | None:
+    try:
+        db=Prisma()
+        await db.connect()
+        execution = await db.agentgraphexecution.find_first(
+            where={"id": execution_id, "isDeleted": False, "userId": user_id}
+        )
+        if not execution:
+            return None
+        await db.disconnect()
+        return execution
+    except Exception as e:
+        msg=str(e)
+        print(msg)
+
+async def get_agent_persistvariabls(
+    graph_id: Optional[str] = None,
+) -> AgentPersistentVarData:
+    db=Prisma()
+    await db.connect()
+    execution = await db.agentpersistentvardata.find_first(where={"agentGraphId":graph_id})
+    if not execution:
+        return None
+    await db.disconnect()
+    return execution
 
 class BlockType(Enum):
     STANDARD = "Standard"
@@ -465,18 +496,29 @@ class Block(ABC, Generic[BlockSchemaInputType, BlockSchemaOutputType]):
         # retreive variables within the context of this execution here
         # then process the input data so any reference to {{variable_name}} is replaced with the value of the variable
         graph_exec_id=kwargs['graph_exec_id']
-        agent_exec:AgentGraphExecution| None=AgentGraphExecution().prisma().find_first(where={"id":graph_exec_id})
-        agent_persvars:AgentPersistentVarData| None=AgentPersistentVarData().prisma().find_first(where={"agentGraphId":graph_exec_id})
-        vars=agent_exec.variables
+        graph_id=kwargs['graph_id']
+        user_id=kwargs['user_id']
+
+        try:
+            agent_exec=asyncio.run(get_graph_execution(user_id=user_id,execution_id=graph_exec_id))
+            agent_persvars=asyncio.run(get_agent_persistvariabls(graph_id=graph_id))
+            
+        except Exception as e:
+            error_msg = str(e)
+
+        vars=agent_exec.variables if agent_exec.variables else [] 
         if agent_persvars:
-            pvars=agent_exec.variables
+            pvars=agent_persvars.variables if agent_persvars.variables else [] 
             if not vars:
                 vars=pvars
             else:
-                vars=vars | pvars
+                merged_dict = {item['VarName']: item for item in vars}
+                for item in pvars:
+                    merged_dict[item['VarName']] = item
+                vars = list(merged_dict.values())
         
         def replace_vars(data: dict[str, any], vars: list[Variable]) -> dict[str, any]:
-            var_map = {v.VarName: str(v.VarValue) for v in vars}
+            var_map = {v.VarName: f'(next((v for v in vars if v.VarName == "{v.VarName}"), None) or type("", (), {{"VarValue": None}})()).VarValue' for v in vars}
             pattern = re.compile(r"\{\{(\w+)\}\}")
 
             def recurse(value):
@@ -489,10 +531,11 @@ class Block(ABC, Generic[BlockSchemaInputType, BlockSchemaOutputType]):
                 else:
                     return value
 
-            return recurse(copy.deepcopy(input_data))
+            return recurse(copy.deepcopy(data))
         if vars:
-            input_data=replace_vars(input_data,vars)
-
+            vars=[SimpleNamespace(**item) for item in vars]
+            input_data=replace_vars(input_data,vars) 
+        kwargs["variables"]=vars
         for output_name, output_data in self._execute(input_data,**kwargs):
             if vars:
                 output_data=replace_vars(output_data,vars)

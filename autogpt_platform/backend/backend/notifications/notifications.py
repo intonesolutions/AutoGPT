@@ -680,7 +680,7 @@ class NotificationManager(AppService):
         message: aio_pika.abc.AbstractMessage | None = None
         try:
             # This parameter "no_ack" is named like shit, think of it as "auto_ack"
-            message = self.run_and_wait(queue.get(timeout=1.0, no_ack=False))
+            message = self.run_and_wait(queue.get(timeout=10.0, no_ack=False)) 
             result = process_func(message.body.decode())
             if result:
                 self.run_and_wait(message.ack())

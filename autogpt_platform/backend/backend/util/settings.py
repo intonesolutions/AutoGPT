@@ -60,7 +60,7 @@ class Config(UpdateTrackingModel["Config"], BaseSettings):
         description="Maximum number of workers to use for graph execution.",
     )
     num_node_workers: int = Field(
-        default=5,
+        default=1,
         ge=1,
         le=1000,
         description="Maximum number of workers to use for node execution within a single graph.",

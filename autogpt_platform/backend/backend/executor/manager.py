@@ -215,8 +215,6 @@ def execute_node(
         credentials, creds_lock = creds_manager.acquire(user_id, credentials_meta.id)
         extra_exec_kwargs[field_name] = credentials
 
-    # get the variables 
-    db_client.graph
     output_size = 0
     try:
         outputs: dict[str, Any] = {}
