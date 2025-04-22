@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from prisma import Prisma,Json
 import asyncio
 import re
+import json
 import copy
 from dataclasses import dataclass, asdict
 from prisma.types import (AgentGraphExecutionUpdateInput,AgentPersistentVarDataUpsertInput,AgentGraphExecutionCreateInput)
@@ -145,4 +146,9 @@ class IntoneSetVariableBlock(Block):
             persistent_dict[var_item.VarName] = var_item
             persistent_vars = list(persistent_dict.values())
             asyncio.run(update_agent_persistvariabls(graph_id=graph_id,variables=persistent_vars))
-        yield "value", val
+        vlstr=""
+        try:
+            valstr=json.dumps(val, default=str)
+        except Exception as e:
+            valstr=""
+        yield "value",  valstr

@@ -3,7 +3,7 @@
   "version": "0.3.4",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "set NODE_OPTIONS=--inspect && next dev",
     "eks":"NODE_ENV=eks && next dev",
     "dev:nosentry": "NODE_ENV=development && DISABLE_SENTRY=true && next dev",
     "dev:test": "NODE_ENV=test && next dev",
