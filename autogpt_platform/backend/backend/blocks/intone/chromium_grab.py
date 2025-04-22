@@ -7,13 +7,10 @@ import time
 
 class ChromiumContentGrabBlock(Block):
     class Input(BlockSchema):
-        url: str = SchemaField(
-            description="the url"
-        )
-        selectorToWaitFor: str = SchemaField(
-            description="The selector to wait for when the page is loaded"
-        )
+        url: str = SchemaField(description="the url")
+        selectorToWaitFor: str = SchemaField(description="The selector to wait for when the page is loaded")
         maxTimeInSec: int=SchemaField(description="max time to wait for the selector in seconds")
+        filterScript: str=SchemaField(description="js script to execute right before grabbing the content. use $ for jQuery",default=";")
         resultSelector: str=SchemaField(description="the selector for the result content")
 
     class Output(BlockSchema):
@@ -106,6 +103,9 @@ class ChromiumContentGrabBlock(Block):
 
                 # Step 7: Query `resultSel` and return its text if found
                 print("eval selection jq")
+                if input_data.filterScript:
+                    scrpt=input_data.filterScript.replace("$","jQuery")
+                    page.evaluate(f'() => {scrpt}')
                 text = page.evaluate(f'() => jQuery("{result_sel}").first().text() || null')
                 stdout_logs+=f"eval text: {text}"
                 html=page.evaluate(f'() => jQuery("{result_sel}").first().html() || null')
