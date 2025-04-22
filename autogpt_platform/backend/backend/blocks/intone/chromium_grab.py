@@ -103,6 +103,8 @@ class ChromiumContentGrabBlock(Block):
 
                 # Step 7: Query `resultSel` and return its text if found
                 print("eval selection jq")
+                page.evaluate(f'() =>window.scrollTo(0, document.body.scrollHeight);')
+                page.evaluate(f'() =>window.scrollTo(0, 0);')
                 if input_data.filterScript:
                     scrpt=input_data.filterScript.replace("$","jQuery")
                     page.evaluate(f'() => {scrpt}')
