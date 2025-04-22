@@ -518,7 +518,7 @@ class Block(ABC, Generic[BlockSchemaInputType, BlockSchemaOutputType]):
                 vars = list(merged_dict.values())
         
         def replace_vars(data: dict[str, any], vars: list[Variable]) -> dict[str, any]:
-            var_map = {v.VarName: f'(next((v for v in vars if v.VarName == "{v.VarName}"), None) or type("", (), {{"VarValue": None}})()).VarValue' for v in vars}
+            var_map = {v.VarName: v.VarValue for v in vars}
             pattern = re.compile(r"\{\{(\w+)\}\}")
 
             def recurse(value):
