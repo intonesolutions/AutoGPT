@@ -131,7 +131,7 @@ class IntoneSetVariableBlock(Block):
             expr=pattern.sub(lambda m: f'(next((v for v in vars if v.VarName == "{item.VarName}"), None) or type("", (), {{"VarValue": None}})()).VarValue' if m.group(1) == item.VarName else m.group(0), expr)
         val=None
         scope={"vars":vars}
-        exec("val=" + expr,scope)
+        exec("import json \r\nimport math\r\n"+"val=" + expr,scope)
         val=scope["val"]
         var_item={"VarName":input_data.target_variable,"VarValue":val,"Persistent":False}
         var_item=SimpleNamespace(**var_item)
