@@ -263,6 +263,7 @@ class BlockSchema(BaseModel):
     def get_missing_input(cls, data: BlockInput) -> set[str]:
         return cls.get_required_fields() - set(data)
 
+    xflowctl: str=SchemaField(default="-",description="use this to control the flow to this block if you cannot use other outlets.")
 
 BlockSchemaInputType = TypeVar("BlockSchemaInputType", bound=BlockSchema)
 BlockSchemaOutputType = TypeVar("BlockSchemaOutputType", bound=BlockSchema)
@@ -373,8 +374,6 @@ class Block(ABC, Generic[BlockSchemaInputType, BlockSchemaOutputType]):
         self.webhook_config = webhook_config
         self.execution_stats: NodeExecutionStats = NodeExecutionStats()
 
-        self.input_schema.__annotations__['_flowctl'] = str
-        setattr(self.input_schema, '_flowctl', SchemaField(default="-",description="use this to control the flow to this block if you cannot use other outlets."))
 
         if self.webhook_config:
             if isinstance(self.webhook_config, BlockWebhookConfig):
