@@ -521,7 +521,14 @@ class Block(ABC, Generic[BlockSchemaInputType, BlockSchemaOutputType]):
                 vars = list(merged_dict.values())
         
         def replace_vars(data: dict[str, any], vars: list[Variable]) -> dict[str, any]:
-            var_map = {v.VarName: v.VarValue for v in vars}
+            def obj_to_string(obj):
+                try:
+                    # Try to serialize complex object to JSON
+                    return json.dumps(obj, default=str)
+                except (TypeError, ValueError):
+                    # Fallback for simple objects or unserializable types
+                    return str(obj)
+            var_map = {v.VarName: obj_to_string(v.VarValue) for v in vars}
             pattern = re.compile(r"\{\{(\w+)\}\}")
 
             def recurse(value):
