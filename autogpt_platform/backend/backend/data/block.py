@@ -33,6 +33,7 @@ from .model import (
     Credentials,
     CredentialsMetaInput,
     is_credentials_field_name,
+    SchemaField
 )
 import asyncio
 
@@ -371,6 +372,9 @@ class Block(ABC, Generic[BlockSchemaInputType, BlockSchemaOutputType]):
         self.block_type = block_type
         self.webhook_config = webhook_config
         self.execution_stats: NodeExecutionStats = NodeExecutionStats()
+
+        self.input_schema.__annotations__['_flowctl'] = str
+        setattr(self.input_schema, '_flowctl', SchemaField(default="-",description="use this to control the flow to this block if you cannot use other outlets."))
 
         if self.webhook_config:
             if isinstance(self.webhook_config, BlockWebhookConfig):
