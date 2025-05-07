@@ -148,7 +148,10 @@ class IntoneSetVariableBlock(Block):
             asyncio.run(update_agent_persistvariabls(graph_id=graph_id,variables=persistent_vars))
         vlstr=""
         try:
-            valstr=json.dumps(val, default=str)
+            if isinstance(val, str):
+                valstr=val
+            else:
+                valstr=json.dumps(val, default=str)
         except Exception as e:
             valstr=""
         yield "value",  valstr
