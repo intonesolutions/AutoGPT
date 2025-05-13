@@ -5,10 +5,14 @@ from enum import Enum, EnumMeta
 from json import JSONDecodeError
 from types import MappingProxyType
 from typing import Any, Iterable, List, Literal, NamedTuple, Optional
-
+import base64
+import io
+import os
+import re
 import anthropic
 import ollama
 import openai
+import time
 from anthropic import NotGiven
 from anthropic.types import ToolParam
 from groq import Groq
@@ -282,6 +286,7 @@ def convert_openai_tool_fmt_to_anthropic(
 def llm_call(
     credentials: APIKeyCredentials,
     llm_model: LlmModel,
+    files:dict[str,str],
     prompt: list[dict],
     json_format: bool,
     max_tokens: int | None,
@@ -315,6 +320,39 @@ def llm_call(
         tools_param = tools if tools else openai.NOT_GIVEN
         oai_client = openai.OpenAI(api_key=credentials.api_key.get_secret_value())
         response_format = None
+        uploaded_files : dict[str, dict] = {}
+        numOfFiles=0
+        # currently supports only image files or text files
+        image_exts = {"png", "jpg", "jpeg"}
+        text_exts = {"txt", "text", "htm", "html", "log", "md", "csv"}
+        for filename, filedata in files.items():
+            ext = os.path.splitext(filename)[1].lower().lstrip(".")
+            tool_type="file_search"
+            if ext in image_exts:
+                file_type = "image"
+            elif ext in text_exts:
+                file_type = "text"
+                tool_type="file_search"
+            else:
+                continue  # skip unsupported types
+            # Extract base64 part using regex
+            match = re.match(r"data:.*?;base64,(.*)", filedata)
+            if match:
+                base64_data = match.group(1)
+                file_bytes = base64.b64decode(base64_data)
+                # Get file extension and type
+                file_obj = io.BytesIO(file_bytes)
+                file_obj.name = filename  # Important for OpenAI API
+                #uploaded_file = oai_client.files.create(file=file_obj, purpose="vision")
+            
+            uploaded_files[filename] = {
+                #"file_id": uploaded_file.id,
+                "file_type": file_type,
+                "tool_type":tool_type,
+                "data":filedata
+            }
+            numOfFiles+=1
+            
 
         if llm_model in [LlmModel.O1_MINI, LlmModel.O1_PREVIEW]:
             sys_messages = [p["content"] for p in prompt if p["role"] == "system"]
@@ -323,16 +361,121 @@ def llm_call(
                 {"role": "user", "content": "\n".join(sys_messages)},
                 {"role": "user", "content": "\n".join(usr_messages)},
             ]
+
         elif json_format:
             response_format = {"type": "json_object"}
+        
+        response={}
+        if numOfFiles>0:
+            for filename, file_info  in uploaded_files.items():
+                #file_id = file_info["file_id"]
+                file_data=file_info["data"]
+                file_type = file_info["file_type"]
 
-        response = oai_client.chat.completions.create(
-            model=llm_model.value,
-            messages=prompt,  # type: ignore
-            response_format=response_format,  # type: ignore
-            max_completion_tokens=max_tokens,
-            tools=tools_param,  # type: ignore
-        )
+                if file_type == "image":
+                    prompt.append({
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": f"Attached image: {filename}"},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": file_data #f"openai://file/{file_id}"
+                                }
+                            }
+                        ]
+                    })
+                elif file_type == "text":
+                    prompt.append({
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": f"content of file: {filename} is below:\n{file_data}"}
+                        ]
+                    })
+            response = oai_client.chat.completions.create(
+                model=llm_model.value,
+                messages=prompt,  # type: ignore
+                response_format=response_format,  # type: ignore
+                max_completion_tokens=max_tokens,
+                tools=tools_param,  # type: ignore
+            )
+            ##### use assistants API to handle files and conversation
+            # # Step 1: Create the assistant (only once; reuse ID after creation)
+            # assistant = oai_client.beta.assistants.create(
+            #     name="File Assistant",
+            #     instructions="You are a helpful assistant that processes uploaded files.",
+            #     model=llm_model.value,
+            #     tools=[{"type": "file_search"}]  # Optional, required for PDFs, etc.
+            # )
+            # # Step 2: Create a thread
+            # thread = oai_client.beta.threads.create()
+
+            # # Step 3: Send a message referencing the file
+            # oai_client.beta.threads.messages.create(
+            #     thread_id=thread.id,
+            #     role="user",
+            #     content="\n\n".join(msg["content"] for msg in prompt if msg["role"] == "user"),
+            #     attachments=[
+            #         {
+            #             "file_id": file_info["file_id"],
+            #             "tools": [{"type": file_info["tool_type"]}]
+            #         } for file_info in uploaded_files.values()
+            #     ]
+            # )
+
+            # # Step 4: Run the assistant on the thread
+            # run = oai_client.beta.threads.runs.create(
+            #     thread_id=thread.id,
+            #     assistant_id=assistant.id
+            # )
+
+            # # Step 5: Poll until complete
+            # while True:
+            #     run = oai_client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
+            #     if run.status == "completed":
+            #         break
+            #     time.sleep(1)
+
+            # # Step 6: Get the assistant's reply
+            # thread_messages  = oai_client.beta.threads.messages.list(thread_id=thread.id)
+            # # Collect assistant messages only (in correct order: oldest → newest)
+            # assistant_messages = [
+            #     {
+            #         "index":0,
+            #         "message": {
+            #             "role": "assistant",
+            #             "content": part.text.value
+            #         },
+            #         "finish_reason": "stop"
+            #     }
+            #     for msg in reversed(thread_messages.data)
+            #     if msg.role == "assistant"
+            #     for part in msg.content
+            #     if part.type == "text"
+            # ]
+
+            # # Build fake ChatCompletion-like response object
+            # response = {
+            #     "id":thread_messages.data[0].id,
+            #     "object": "chat.completion",
+            #     "created":thread_messages.data[0].created_at,
+            #     "model": llm_model.value,
+            #     "choices": assistant_messages,
+            #     "usage": {
+            #         "prompt_tokens": 0,
+            #         "completion_tokens": 0,
+            #         "total_tokens": 0
+            #     }
+            # }
+        else:
+            response = oai_client.chat.completions.create(
+                model=llm_model.value,
+                messages=prompt,  # type: ignore
+                response_format=response_format,  # type: ignore
+                max_completion_tokens=max_tokens,
+                tools=tools_param,  # type: ignore
+            )
+        
 
         if response.choices[0].message.tool_calls:
             tool_calls = [
@@ -534,6 +677,11 @@ class AIBlockBase(Block, ABC):
 
 class AIStructuredResponseGeneratorBlock(AIBlockBase):
     class Input(BlockSchema):
+        files: dict[str,str] = SchemaField(
+            advanced=False,
+            default_factory=dict,
+            description="URL encoded files. key is the name of the file. value is the data of the file such as: data:image/png;base64,...",
+        )
         prompt: str = SchemaField(
             description="The prompt to send to the language model.",
             placeholder="Enter your prompt here...",
@@ -629,6 +777,7 @@ class AIStructuredResponseGeneratorBlock(AIBlockBase):
         self,
         credentials: APIKeyCredentials,
         llm_model: LlmModel,
+        files: dict[str,str],
         prompt: list[dict],
         json_format: bool,
         max_tokens: int | None,
@@ -643,6 +792,7 @@ class AIStructuredResponseGeneratorBlock(AIBlockBase):
         return llm_call(
             credentials=credentials,
             llm_model=llm_model,
+            files=files,
             prompt=prompt,
             json_format=json_format,
             max_tokens=max_tokens,
@@ -662,6 +812,12 @@ class AIStructuredResponseGeneratorBlock(AIBlockBase):
 
         values = input_data.prompt_values
         if values:
+            # any value that has its name like a filename with ext and its value is data:...., remove it from values and add it to files
+            # you can refeence the file by its name in the conversation
+            for key in list(values.keys()):
+                if re.match(r"^[^\/\\]+\.[a-zA-Z0-9]+$", key) and re.match(r"data:.*?;base64,.*", values[key]):
+                    input_data.files[key] = values.pop(key)
+
             input_data.prompt = fmt.format_string(input_data.prompt, values)
             input_data.sys_prompt = fmt.format_string(input_data.sys_prompt, values)
 
@@ -685,7 +841,7 @@ class AIStructuredResponseGeneratorBlock(AIBlockBase):
 
         if input_data.prompt:
             prompt.append({"role": "user", "content": input_data.prompt})
-
+        
         def parse_response(resp: str) -> tuple[dict[str, Any], str | None]:
             try:
                 parsed = json.loads(resp)
@@ -707,6 +863,7 @@ class AIStructuredResponseGeneratorBlock(AIBlockBase):
                 llm_response = self.llm_call(
                     credentials=credentials,
                     llm_model=llm_model,
+                    files=input_data.files,
                     prompt=prompt,
                     json_format=bool(input_data.expected_format),
                     ollama_host=input_data.ollama_host,

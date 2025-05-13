@@ -534,7 +534,7 @@ class Block(ABC, Generic[BlockSchemaInputType, BlockSchemaOutputType]):
             def recurse(value):
                 if isinstance(value, str):
                     s=pattern.sub(lambda m: var_map.get(m.group(1), m.group(0)), value)
-                    # s=pattern.sub("",s)
+                    # s=pattern.sub("",s) ### do not enable this because it removes all {{xxxx}} which affects the property replacement in other blocks
                     return s
                 elif isinstance(value, dict):
                     return {k: recurse(v) for k, v in value.items()}

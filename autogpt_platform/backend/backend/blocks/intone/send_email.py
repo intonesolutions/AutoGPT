@@ -45,9 +45,11 @@ class IntoneSendEmailBlock(Block):
             description="Subject of the email", placeholder="Enter the email subject"
         )
         body: str = SchemaField(
+            default=" ",
             description="Body of the email in text", placeholder="Enter the email body"
         )
         bodyHtml: str = SchemaField(
+            default=" ",
             description="Body of the email in html", placeholder="Enter the email body",
         )
         config: SMTPConfig = SchemaField(
@@ -88,9 +90,9 @@ class IntoneSendEmailBlock(Block):
         msg["From"] = smtp_username
         msg["To"] = to_email
         msg["Subject"] = subject
-        if body:
+        if body is not None and body.strip() != "":
             msg.attach(MIMEText(body, "plain"))
-        if bodyHtml:
+        if bodyHtml is not None and bodyHtml.strip() != "":
             msg.attach(MIMEText(bodyHtml,"html"))
         try:
             server=smtplib.SMTP(smtp_server, smtp_port)
