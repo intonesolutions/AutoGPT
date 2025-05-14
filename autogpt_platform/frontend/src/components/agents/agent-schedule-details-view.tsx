@@ -44,6 +44,10 @@ export default function AgentScheduleDetailsView({
         label: "Scheduled for",
         value: schedule.next_run_time.toLocaleString(),
       },
+      {
+        label: "Version number",
+        value: schedule.graph_version,
+      },
     ];
   }, [schedule, selectedRunStatus]);
 

@@ -95,9 +95,13 @@ code {
 }
 
 .flow-container {
+  background-color: #1c2346;
   position: absolute;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
+}
+.whitebkg{
+  background-color: #ffffff;
 }
