@@ -40,8 +40,8 @@ export default function useCredentials(
       ]) ||
     "openai";
 
-  let providerName: CredentialsProviderName;
-  if (credsInputSchema.credentials_provider.length > 1) {
+  let providerName: CredentialsProviderName | null;
+  if (credsInputSchema.credentials_provider?.length > 1) {
     if (!credsInputSchema.discriminator) {
       throw new Error(
         "Multi-provider credential input requires discriminator!",
@@ -56,19 +56,18 @@ export default function useCredentials(
     }
     providerName = discriminatorValue;
   } else {
-    providerName = credsInputSchema.credentials_provider[0];
+    providerName = credsInputSchema.credentials_provider?credsInputSchema.credentials_provider[0]:null;
   }
-  const provider = allProviders ? allProviders[providerName] : null;
+  const provider = allProviders && providerName ? allProviders[providerName] : null;
 
   // If block input schema doesn't have credentials, return null
   if (!credsInputSchema) {
     return null;
   }
 
-  const supportsApiKey = credsInputSchema.credentials_types.includes("api_key");
-  const supportsOAuth2 = credsInputSchema.credentials_types.includes("oauth2");
-  const supportsUserPassword =
-    credsInputSchema.credentials_types.includes("user_password");
+  const supportsApiKey = credsInputSchema.credentials_types?credsInputSchema.credentials_types.includes("api_key"):false;
+  const supportsOAuth2 = credsInputSchema.credentials_types?credsInputSchema.credentials_types.includes("oauth2"):false;
+  const supportsUserPassword =credsInputSchema.credentials_types? credsInputSchema.credentials_types.includes("user_password"):false;
 
   // No provider means maybe it's still loading
   if (!provider) {
