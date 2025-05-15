@@ -53,6 +53,9 @@ import {
   UserOnboarding,
   ReviewSubmissionRequest,
   SubmissionStatus,
+  AddUserCreditsResponse,
+  UsersBalanceHistoryResponse,
+  CredentialsMetaInput,
 } from "./types";
 import { createBrowserClient } from "@supabase/ssr";
 import getServerSupabase from "../supabase/getServerSupabase";
@@ -180,7 +183,9 @@ export default class BackendAPI {
     return this._get("/onboarding");
   }
 
-  updateUserOnboarding(onboarding: Partial<UserOnboarding>): Promise<void> {
+  updateUserOnboarding(
+    onboarding: Omit<Partial<UserOnboarding>, "rewardedFor">,
+  ): Promise<void> {
     return this._request("PATCH", "/onboarding", onboarding);
   }
 
@@ -249,9 +254,13 @@ export default class BackendAPI {
   executeGraph(
     id: GraphID,
     version: number,
-    inputData: { [key: string]: any } = {},
+    inputs: { [key: string]: any } = {},
+    credentials_inputs: { [key: string]: CredentialsMetaInput } = {},
   ): Promise<{ graph_exec_id: GraphExecutionID }> {
-    return this._request("POST", `/graphs/${id}/execute/${version}`, inputData);
+    return this._request("POST", `/graphs/${id}/execute/${version}`, {
+      inputs,
+      credentials_inputs,
+    });
   }
 
   getExecutions(): Promise<GraphExecutionMeta[]> {
@@ -532,9 +541,9 @@ export default class BackendAPI {
     return this._get(url);
   }
 
-  ////////////////////////////////////////
-  ////////////// Admin API ///////////////
-  ////////////////////////////////////////
+  /////////////////////////////////////////
+  /////////// Admin API ///////////////////
+  /////////////////////////////////////////
 
   getAdminListingsWithVersions(params?: {
     status?: SubmissionStatus;
@@ -556,6 +565,32 @@ export default class BackendAPI {
     );
   }
 
+  addUserCredits(
+    user_id: string,
+    amount: number,
+    comments: string,
+  ): Promise<AddUserCreditsResponse> {
+    return this._request("POST", "/credits/admin/add_credits", {
+      user_id,
+      amount,
+      comments,
+    });
+  }
+
+  getUsersHistory(params?: {
+    search?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<UsersBalanceHistoryResponse> {
+    return this._get("/credits/admin/users_history", params);
+  }
+
+  downloadStoreAgentAdmin(storeListingVersionId: string): Promise<BlobPart> {
+    const url = `/store/admin/submissions/download/${storeListingVersionId}`;
+
+    return this._get(url);
+  }
+
   ////////////////////////////////////////
   //////////// V2 LIBRARY API ////////////
   ////////////////////////////////////////
@@ -571,6 +606,12 @@ export default class BackendAPI {
 
   getLibraryAgent(id: LibraryAgentID): Promise<LibraryAgent> {
     return this._get(`/library/agents/${id}`);
+  }
+
+  getLibraryAgentByStoreListingVersionID(
+    storeListingVersionId: string,
+  ): Promise<LibraryAgent | null> {
+    return this._get(`/library/agents/marketplace/${storeListingVersionId}`);
   }
 
   addMarketplaceAgentToLibrary(
@@ -591,6 +632,10 @@ export default class BackendAPI {
     },
   ): Promise<void> {
     await this._request("PUT", `/library/agents/${libraryAgentId}`, params);
+  }
+
+  forkLibraryAgent(libraryAgentId: LibraryAgentID): Promise<LibraryAgent> {
+    return this._request("POST", `/library/agents/${libraryAgentId}/fork`);
   }
 
   listLibraryAgentPresets(params?: {

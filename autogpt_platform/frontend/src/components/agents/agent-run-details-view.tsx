@@ -1,6 +1,7 @@
 "use client";
 import React, { useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { isEmpty } from "lodash";
 import moment from "moment";
 
 import { useBackendAPI } from "@/lib/autogpt-server-api/context";
@@ -23,6 +24,7 @@ import {
   AgentRunStatus,
   agentRunStatusMap,
 } from "@/components/agents/agent-run-status-chip";
+import useCredits from "@/hooks/useCredits";
 
 export default function AgentRunDetailsView({
   agent,
@@ -40,7 +42,9 @@ export default function AgentRunDetailsView({
   deleteRun: () => void;
 }): React.ReactNode {
   const api = useBackendAPI();
-  const router = useRouter();
+  const router = useRouter();  
+  const { formatCredits } = useCredits();
+
   const runStatus: AgentRunStatus = useMemo(
     () => agentRunStatusMap[run.status],
     [run],
@@ -66,11 +70,11 @@ export default function AgentRunDetailsView({
               value: moment.duration(run.stats.duration, "seconds").humanize(),
             },
             { label: "Steps", value: run.stats.node_exec_count },
-            { label: "Cost", value: `${run.stats.cost} credits` },
+            { label: "Cost", value: formatCredits(run.stats.cost) },
           ]
         : []),
     ];
-  }, [run, runStatus]);
+  }, [run, runStatus, formatCredits]);
 
   const agentRunInputs:
     | Record<
@@ -165,7 +169,8 @@ export default function AgentRunDetailsView({
           ] satisfies ButtonAction[])
         : []),
       ...(["success", "failed", "stopped"].includes(runStatus) &&
-      !graph.has_webhook_trigger
+      !graph.has_webhook_trigger &&
+      isEmpty(graph.credentials_input_schema.required) // TODO: enable re-run with credentials - https://linear.app/autogpt/issue/SECRT-1243
         ? [
             {
               label: (
@@ -197,6 +202,7 @@ export default function AgentRunDetailsView({
       stopRun,
       deleteRun,
       graph.has_webhook_trigger,
+      graph.credentials_input_schema.properties,
       agent.can_access_graph,
       run.graph_id,
       run.graph_version,
@@ -241,7 +247,10 @@ export default function AgentRunDetailsView({
                         {title || key}
                       </label>
                       {values.map((value, i) => (
-                        <p className="text-sm text-neutral-700" key={i}>
+                        <p
+                          className="resize-none whitespace-pre-wrap break-words border-none text-sm text-neutral-700 disabled:cursor-not-allowed"
+                          key={i}
+                        >
                           {value}
                         </p>
                       ))}
@@ -265,11 +274,7 @@ export default function AgentRunDetailsView({
               Object.entries(agentRunInputs).map(([key, { title, value }]) => (
                 <div key={key} className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium">{title || key}</label>
-                  <Input
-                    defaultValue={value}
-                    className="rounded-full"
-                    disabled
-                  />
+                  <Input value={value} className="rounded-full" disabled />
                 </div>
               ))
             ) : (
