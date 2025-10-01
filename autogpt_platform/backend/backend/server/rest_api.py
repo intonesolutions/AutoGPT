@@ -35,6 +35,7 @@ from backend.data.model import Credentials
 from backend.integrations.providers import ProviderName
 from backend.server.external.api import external_app
 
+
 settings = backend.util.settings.Settings()
 logger = logging.getLogger(__name__)
 

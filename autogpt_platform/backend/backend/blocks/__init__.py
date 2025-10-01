@@ -52,7 +52,8 @@ def load_all_blocks() -> dict[str, type["Block"]]:
             )
 
         block = block_cls.create()
-
+        if block.disabled:
+            continue
         if not isinstance(block.id, str) or len(block.id) != 36:
             raise ValueError(
                 f"Block ID {block.name} error: {block.id} is not a valid UUID"

@@ -1,6 +1,6 @@
 import logging
 from typing import TYPE_CHECKING
-
+import os
 if TYPE_CHECKING:
     from backend.util.process import AppProcess
 
@@ -36,16 +36,29 @@ def main(**kwargs):
     from backend.notifications import NotificationManager
     from backend.server.rest_api import AgentServer
     from backend.server.ws_api import WebsocketServer
-
-    run_processes(
-        DatabaseManager(),
-        ExecutionManager(),
-        Scheduler(),
-        NotificationManager(),
-        WebsocketServer(),
-        AgentServer(),
-        **kwargs,
-    )
+    from backend._tester.tests_executor import TestsExecutor
+    debug:bool=os.getenv("debug")=="1"
+    if not debug:
+        run_processes(
+            DatabaseManager(),
+            ExecutionManager(),
+            Scheduler(),
+            NotificationManager(),
+            WebsocketServer(),
+            AgentServer(),
+            **kwargs,
+        )
+    else:
+        run_processes(
+            DatabaseManager(),
+            ExecutionManager(),
+            Scheduler(),
+            NotificationManager(),
+            WebsocketServer(),
+            AgentServer(),
+            TestsExecutor(),
+            **kwargs,
+        )
 
 
 if __name__ == "__main__":

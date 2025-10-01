@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from .routes.v1 import v1_router
+from .intone.routes import IntoneRouter
 
 external_app = FastAPI(
     title="AutoGPT External API",
@@ -9,3 +10,4 @@ external_app = FastAPI(
     version="1.0",
 )
 external_app.include_router(v1_router, prefix="/v1")
+external_app.include_router(IntoneRouter, prefix="/v1/intone")

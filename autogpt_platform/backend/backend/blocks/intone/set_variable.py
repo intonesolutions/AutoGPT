@@ -13,7 +13,7 @@ import json
 import copy
 from dataclasses import dataclass, asdict
 from prisma.types import (AgentGraphExecutionUpdateInput,AgentPersistentVarDataUpsertInput,AgentGraphExecutionCreateInput)
-from backend.data.block import Block, BlockCategory, BlockOutput, BlockSchema
+from backend.data.block import Block, BlockCategory, BlockOutput, BlockSchema,update_agent_persistvariabls
 from backend.data.model import (
     CredentialsField,
     CredentialsMetaInput,
@@ -55,30 +55,7 @@ async def update_graph_execution(
         msg=str(e)
         print(msg)
 
-async def update_agent_persistvariabls(
-    graph_id:str,
-    variables:dict[str, any] | None
-) -> AgentPersistentVarData:
-    db=Prisma()
-    await db.connect()
-    vars=[]
-    for item in variables:
-        v=dict()
-        v['VarName']=item.VarName
-        v['VarValue']=item.VarValue
-        v['Persistent']=True
-        vars.append(v)
-    data=Json(vars)
-    execution = await db.agentpersistentvardata.upsert(where={"agentGraphId":graph_id},
-        data=AgentPersistentVarDataUpsertInput(
-            update=AgentGraphExecutionUpdateInput(agentGraphId=graph_id,variables=data),
-            create=AgentGraphExecutionCreateInput(agentGraphId=graph_id,variables=data)
-        )
-    )
-    if not execution:
-        return None
-    await db.disconnect()
-    return execution
+
 
 class PersistencyMode (str,Enum):
     EP="execution persistence (single execution)"

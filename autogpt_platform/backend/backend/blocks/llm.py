@@ -395,33 +395,59 @@ def llm_call(
                 #file_id = file_info["file_id"]
                 file_data=file_info["data"]
                 file_type = file_info["file_type"]
-
+                
+                first_user_message = next(msg for msg in prompt if msg.get("role") == "user")
+                if first_user_message and isinstance(first_user_message["content"],str):
+                    first_user_message["content"] = [{"type": "text", "text": first_user_message["content"]}]
                 if file_type == "image":
-                    prompt.append({
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": f"Attached image: {filename}"},
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": file_data #f"openai://file/{file_id}"
+                    if first_user_message:
+                        first_user_message["content"].extend([
+                                #{"type": "text", "text": f"Attached image: {filename}"},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": file_data #f"openai://file/{file_id}"
+                                    }
                                 }
-                            }
-                        ]
-                    })
+                            ]
+                        )
+                    else:
+                        prompt.append({
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": f"Attached image: {filename}"},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": file_data #f"openai://file/{file_id}"
+                                    }
+                                }
+                            ]
+                        })
                 elif file_type == "text":
-                    prompt.append({
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": f"content of file: {filename} is below:\n{file_data}"}
-                        ]
-                    })
+                    if first_user_message:
+                        first_user_message["content"].extend([
+                                {"type": "text", "text": f"content of file: {filename} is below:\n{file_data}"}
+                            ]
+                        )
+                    else:
+                        prompt.append({
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": f"content of file: {filename} is below:\n{file_data}"}
+                            ]
+                        })
             response = oai_client.chat.completions.create(
                 model=llm_model.value,
                 messages=prompt,  # type: ignore
                 response_format=response_format,  # type: ignore
                 max_completion_tokens=max_tokens,
                 tools=tools_param,  # type: ignore
+                top_p=0.5,
+                temperature=0, 
+                seed=100,
+                # presence_penalty=-2,
+                # frequency_penalty=-2,
                 parallel_tool_calls=(
                     openai.NOT_GIVEN if parallel_tool_calls is None else parallel_tool_calls
                 )

@@ -5,5 +5,6 @@ after pulling and merging from main fork:
 1.5- then run : poetry lock
 2- generate prisma client: poetry run prisma generate
 3- update the db: poetry run prisma migrate dev (reset if you have to)
+            or run all the migration sql scripts if you know where to start from
 
 2- in frontend

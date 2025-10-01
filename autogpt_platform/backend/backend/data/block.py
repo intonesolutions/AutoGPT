@@ -1,6 +1,7 @@
 import inspect
 import copy
 import re
+import json
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import (
@@ -20,14 +21,15 @@ import jsonref
 import jsonschema
 from prisma.models import AgentBlock
 from prisma.types import AgentBlockCreateInput
-from pydantic import BaseModel
+from pydantic import BaseModel,ConfigDict
 
 from backend.data.model import NodeExecutionStats
 from backend.integrations.providers import ProviderName
 from backend.util import json
 from backend.util.settings import Config
 from prisma.models import (AgentGraphExecution,AgentPersistentVarData)
-from prisma import Prisma
+from prisma.types import (AgentGraphExecutionUpdateInput,AgentPersistentVarDataUpsertInput,AgentGraphExecutionCreateInput)
+from prisma import Prisma,Json
 from .model import (
     ContributorDetails,
     Credentials,
@@ -73,6 +75,30 @@ async def get_agent_persistvariabls(
     db=Prisma()
     await db.connect()
     execution = await db.agentpersistentvardata.find_first(where={"agentGraphId":graph_id})
+    if not execution:
+        return None
+    await db.disconnect()
+    return execution
+async def update_agent_persistvariabls(
+    graph_id:str,
+    variables:dict[str, any] | None
+) -> AgentPersistentVarData:
+    db=Prisma()
+    await db.connect()
+    vars=[]
+    for item in variables:
+        v=dict()
+        v['VarName']=item.VarName
+        v['VarValue']=item.VarValue
+        v['Persistent']=True
+        vars.append(v)
+    data=Json(vars)
+    execution = await db.agentpersistentvardata.upsert(where={"agentGraphId":graph_id},
+        data=AgentPersistentVarDataUpsertInput(
+            update=AgentGraphExecutionUpdateInput(agentGraphId=graph_id,variables=data),
+            create=AgentGraphExecutionCreateInput(agentGraphId=graph_id,variables=data)
+        )
+    )
     if not execution:
         return None
     await db.disconnect()
@@ -129,6 +155,10 @@ class Variable:
     Persistent: bool
 
 class BlockSchema(BaseModel):
+    model_config = ConfigDict(
+        extra="allow",
+        arbitrary_types_allowed=True,
+    )
     cached_jsonschema: ClassVar[dict[str, Any]]
 
     @classmethod
