@@ -3,14 +3,18 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Protocol
 
+import pydantic
 import uvicorn
-from autogpt_libs.auth import parse_jwt_token
-from autogpt_libs.logging.utils import generate_uvicorn_config
+from autogpt_libs.auth.jwt_utils import parse_jwt_token
 from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
 from starlette.middleware.cors import CORSMiddleware
 
 from backend.data.execution import AsyncRedisExecutionEventBus
 from backend.data.user import DEFAULT_USER_ID
+from backend.monitoring.instrumentation import (
+    instrument_fastapi,
+    update_websocket_connections,
+)
 from backend.server.conn_manager import ConnectionManager
 from backend.server.model import (
     WSMessage,
@@ -18,6 +22,7 @@ from backend.server.model import (
     WSSubscribeGraphExecutionRequest,
     WSSubscribeGraphExecutionsRequest,
 )
+from backend.util.retry import continuous_retry
 from backend.util.service import AppProcess
 from backend.util.settings import AppEnvironment, Config, Settings
 
@@ -37,6 +42,15 @@ docs_url = "/docs" if settings.config.app_env == AppEnvironment.LOCAL else None
 app = FastAPI(lifespan=lifespan, docs_url=docs_url)
 _connection_manager = None
 
+# Add Prometheus instrumentation
+instrument_fastapi(
+    app,
+    service_name="websocket-server",
+    expose_endpoint=True,
+    endpoint="/metrics",
+    include_in_schema=settings.config.app_env == AppEnvironment.LOCAL,
+)
+
 
 def get_connection_manager():
     global _connection_manager
@@ -45,14 +59,11 @@ def get_connection_manager():
     return _connection_manager
 
 
+@continuous_retry()
 async def event_broadcaster(manager: ConnectionManager):
-    try:
-        event_queue = AsyncRedisExecutionEventBus()
-        async for event in event_queue.listen("*"):
-            await manager.send_execution_update(event)
-    except Exception as e:
-        logger.exception(f"Event broadcaster error: {e}")
-        raise
+    event_queue = AsyncRedisExecutionEventBus()
+    async for event in event_queue.listen("*"):
+        await manager.send_execution_update(event)
 
 
 async def authenticate_websocket(websocket: WebSocket) -> str:
@@ -218,10 +229,29 @@ async def websocket_router(
     if not user_id:
         return
     await manager.connect_socket(websocket)
+
+    # Track WebSocket connection
+    update_websocket_connections(user_id, 1)
+
     try:
         while True:
             data = await websocket.receive_text()
-            message = WSMessage.model_validate_json(data)
+            try:
+                message = WSMessage.model_validate_json(data)
+            except pydantic.ValidationError as e:
+                logger.error(
+                    "Invalid WebSocket message from user #%s: %s",
+                    user_id,
+                    e,
+                )
+                await websocket.send_text(
+                    WSMessage(
+                        method=WSMethod.ERROR,
+                        success=False,
+                        error=("Invalid message format. Review the schema and retry"),
+                    ).model_dump_json()
+                )
+                continue
 
             try:
                 if message.method in _MSG_HANDLERS:
@@ -232,6 +262,21 @@ async def websocket_router(
                         message=message,
                     )
                     continue
+            except pydantic.ValidationError as e:
+                logger.error(
+                    "Validation error while handling '%s' for user #%s: %s",
+                    message.method.value,
+                    user_id,
+                    e,
+                )
+                await websocket.send_text(
+                    WSMessage(
+                        method=WSMethod.ERROR,
+                        success=False,
+                        error="Invalid message data. Refer to the API schema",
+                    ).model_dump_json()
+                )
+                continue
             except Exception as e:
                 logger.error(
                     f"Error while handling '{message.method.value}' message "
@@ -258,6 +303,8 @@ async def websocket_router(
     except WebSocketDisconnect:
         manager.disconnect_socket(websocket)
         logger.debug("WebSocket client disconnected")
+    finally:
+        update_websocket_connections(user_id, -1)
 
 
 @app.get("/")
@@ -280,7 +327,7 @@ class WebsocketServer(AppProcess):
             server_app,
             host=Config().websocket_server_host,
             port=Config().websocket_server_port,
-            log_config=generate_uvicorn_config(),
+            log_config=None,
         )
 
     def cleanup(self):

@@ -2,11 +2,11 @@
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { finishOnboarding } from "./actions";
-import { useOnboarding } from "@/components/onboarding/onboarding-provider";
+import { useOnboarding } from "../../../../providers/onboarding/onboarding-provider";
 import * as party from "party-js";
 
 export default function Page() {
-  const { state, updateState } = useOnboarding(7, "AGENT_INPUT");
+  const { completeStep } = useOnboarding(7, "AGENT_INPUT");
   const [showText, setShowText] = useState(false);
   const [showSubtext, setShowSubtext] = useState(false);
   const divRef = useRef(null);
@@ -17,7 +17,7 @@ export default function Page() {
         count: 100,
         spread: 180,
         shapes: ["square", "circle"],
-        size: party.variation.range(2, 2), // scalar: 2
+        size: party.variation.range(2, 2.5),
         speed: party.variation.range(300, 1000),
       });
     }
@@ -31,9 +31,7 @@ export default function Page() {
     }, 500);
 
     const timer2 = setTimeout(() => {
-      updateState({
-        completedSteps: [...(state?.completedSteps || []), "CONGRATS"],
-      });
+      completeStep("CONGRATS");
       finishOnboarding();
     }, 3000);
 

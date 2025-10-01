@@ -1,22 +1,25 @@
 "use client";
-import OnboardingButton from "@/components/onboarding/OnboardingButton";
+import SmartImage from "@/components/__legacy__/SmartImage";
+import { useOnboarding } from "../../../../providers/onboarding/onboarding-provider";
+import OnboardingButton from "../components/OnboardingButton";
+import { OnboardingHeader, OnboardingStep } from "../components/OnboardingStep";
+import { OnboardingText } from "../components/OnboardingText";
+import StarRating from "../components/StarRating";
 import {
-  OnboardingStep,
-  OnboardingHeader,
-} from "@/components/onboarding/OnboardingStep";
-import { OnboardingText } from "@/components/onboarding/OnboardingText";
-import StarRating from "@/components/onboarding/StarRating";
-import { Play } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useCallback, useEffect, useState } from "react";
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/__legacy__/ui/card";
+import { useToast } from "@/components/molecules/Toast/use-toast";
 import { GraphMeta, StoreAgentDetails } from "@/lib/autogpt-server-api";
 import { useBackendAPI } from "@/lib/autogpt-server-api/context";
+import { cn } from "@/lib/utils";
+import { Play } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useOnboarding } from "@/components/onboarding/onboarding-provider";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import SchemaTooltip from "@/components/SchemaTooltip";
-import { TypeBasedInput } from "@/components/type-based-input";
-import SmartImage from "@/components/agptui/SmartImage";
+import { useCallback, useEffect, useState } from "react";
+import { RunAgentInputs } from "@/app/(platform)/library/agents/[id]/components/AgentRunsView/components/RunAgentInputs/RunAgentInputs";
+import { InformationTooltip } from "@/components/molecules/InformationTooltip/InformationTooltip";
 
 export default function Page() {
   const { state, updateState, setStep } = useOnboarding(
@@ -26,6 +29,8 @@ export default function Page() {
   const [showInput, setShowInput] = useState(false);
   const [agent, setAgent] = useState<GraphMeta | null>(null);
   const [storeAgent, setStoreAgent] = useState<StoreAgentDetails | null>(null);
+  const [runningAgent, setRunningAgent] = useState(false);
+  const { toast } = useToast();
   const router = useRouter();
   const api = useBackendAPI();
 
@@ -43,9 +48,10 @@ export default function Page() {
         setStoreAgent(storeAgent);
       });
     api
-      .getAgentMetaByStoreListingVersionId(state?.selectedStoreListingVersionId)
+      .getGraphMetaByStoreListingVersionID(state.selectedStoreListingVersionId)
       .then((agent) => {
         setAgent(agent);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const update: { [key: string]: any } = {};
         // Set default values from schema
         Object.entries(agent.input_schema.properties).forEach(
@@ -76,27 +82,36 @@ export default function Page() {
     [state?.agentInput, updateState],
   );
 
-  const runAgent = useCallback(() => {
+  const runAgent = useCallback(async () => {
     if (!agent) {
       return;
     }
-    api
-      .addMarketplaceAgentToLibrary(storeAgent?.store_listing_version_id || "")
-      .then((libraryAgent) => {
-        api
-          .executeGraph(
-            libraryAgent.graph_id,
-            libraryAgent.graph_version,
-            state?.agentInput || {},
-          )
-          .then(({ graph_exec_id }) => {
-            updateState({
-              onboardingAgentExecutionId: graph_exec_id,
-            });
-            router.push("/onboarding/6-congrats");
-          });
+    setRunningAgent(true);
+    try {
+      const libraryAgent = await api.addMarketplaceAgentToLibrary(
+        storeAgent?.store_listing_version_id || "",
+      );
+      const { id: runID } = await api.executeGraph(
+        libraryAgent.graph_id,
+        libraryAgent.graph_version,
+        state?.agentInput || {},
+      );
+      updateState({
+        onboardingAgentExecutionId: runID,
+        agentRuns: (state?.agentRuns || 0) + 1,
       });
-  }, [api, agent, router, state?.agentInput, storeAgent, updateState]);
+      router.push("/onboarding/6-congrats");
+    } catch (error) {
+      console.error("Error running agent:", error);
+      toast({
+        title: "Error running agent",
+        description:
+          "There was an error running your agent. Please try again or try choosing a different agent if it still fails.",
+        variant: "destructive",
+      });
+      setRunningAgent(false);
+    }
+  }, [api, agent, router, state?.agentInput, storeAgent, updateState, toast]);
 
   const runYourAgent = (
     <div className="ml-[104px] w-[481px] pl-5">
@@ -216,11 +231,11 @@ export default function Page() {
                       <div key={key} className="flex flex-col space-y-2">
                         <label className="flex items-center gap-1 text-sm font-medium">
                           {inputSubSchema.title || key}
-                          <SchemaTooltip
+                          <InformationTooltip
                             description={inputSubSchema.description}
                           />
                         </label>
-                        <TypeBasedInput
+                        <RunAgentInputs
                           schema={inputSubSchema}
                           value={state?.agentInput?.[key]}
                           placeholder={inputSubSchema.description}
@@ -234,14 +249,17 @@ export default function Page() {
               <OnboardingButton
                 variant="violet"
                 className="mt-8 w-[136px]"
+                loading={runningAgent}
                 disabled={
                   Object.values(state?.agentInput || {}).some(
                     (value) => String(value).trim() === "",
-                  ) || !agent
+                  ) ||
+                  !agent ||
+                  runningAgent
                 }
                 onClick={runAgent}
+                icon={<Play className="mr-2" size={18} />}
               >
-                <Play className="" size={18} />
                 Run agent
               </OnboardingButton>
             </div>
