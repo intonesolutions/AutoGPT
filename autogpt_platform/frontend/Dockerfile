@@ -19,7 +19,7 @@ ENV NODE_ENV=eks
 COPY autogpt_platform/frontend/ .
 ENV SKIP_STORYBOOK_TESTS=true
 RUN pnpm run generate:api
-RUN yarn build
+# RUN yarn build
 
 # Prod stage - based on NextJS reference Dockerfile https://github.com/vercel/next.js/blob/64271354533ed16da51be5dce85f0dbd15f17517/examples/with-docker/Dockerfile
 FROM node:21-alpine AS prod
