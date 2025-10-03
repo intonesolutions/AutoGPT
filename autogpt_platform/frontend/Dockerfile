@@ -1,9 +1,8 @@
 # Base stage for both dev and prod
 FROM node:21-alpine AS base
 WORKDIR /app
-RUN corepack enable
-COPY autogpt_platform/frontend/package.json autogpt_platform/frontend/pnpm-lock.yaml ./
-RUN --mount=type=cache,target=/root/.local/share/pnpm pnpm install --frozen-lockfile
+COPY autogpt_platform/frontend/package.json autogpt_platform/frontend/yarn.lock ./
+RUN --mount=type=cache,target=/usr/local/share/.cache yarn install --frozen-lockfile
 
 # Dev stage
 FROM base AS dev
@@ -18,8 +17,7 @@ FROM base AS build
 ENV NODE_ENV=eks
 COPY autogpt_platform/frontend/ .
 ENV SKIP_STORYBOOK_TESTS=true
-RUN pnpm run generate:api
-# RUN yarn build
+RUN yarn build
 
 # Prod stage - based on NextJS reference Dockerfile https://github.com/vercel/next.js/blob/64271354533ed16da51be5dce85f0dbd15f17517/examples/with-docker/Dockerfile
 FROM node:21-alpine AS prod
@@ -37,7 +35,6 @@ COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 COPY --from=build /app/public ./public
-# COPY autogpt_platform/frontend/.env.eks ./.env
 
 USER nextjs
 
