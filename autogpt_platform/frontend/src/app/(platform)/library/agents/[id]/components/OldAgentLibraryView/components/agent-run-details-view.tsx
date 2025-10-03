@@ -3,7 +3,6 @@ import React, { useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { isEmpty } from "lodash";
 import moment from "moment";
-import React, { useCallback, useMemo } from "react";
 
 import {
   Graph,

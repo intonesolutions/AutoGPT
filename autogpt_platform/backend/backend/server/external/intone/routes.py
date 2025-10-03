@@ -1,11 +1,11 @@
 import logging
 from fastapi import APIRouter, Depends
-from backend.server.utils import get_user_id
+# from backend.server.utils import get_user_id
 from .models import SimulationApiResponse, SimulationRequest
 from backend.blocks.intone.chromium_orchestration import ChromiumOrchestrationBlock,OrchestrationInteractionPrompt
 from prisma.enums import AgentExecutionStatus, APIKeyPermission
 from backend.server.external.middleware import require_permission
-from backend.data.api_key import APIKey
+from backend.data.api_key import APIKeyInfo
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ IntoneRouter = APIRouter()
                    )
 def chromeauto_simulate(
     request: SimulationRequest, 
-    api_key: APIKey = Depends(require_permission(APIKeyPermission.EXECUTE_BLOCK))
+    api_key: APIKeyInfo = Depends(require_permission(APIKeyPermission.EXECUTE_BLOCK))
 ) -> SimulationApiResponse:
     """
    

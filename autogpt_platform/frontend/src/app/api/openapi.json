@@ -5401,6 +5401,14 @@
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Username"
           },
+          "api_key": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Api Key"
+          },
+          "expires_at": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Expires At"
+          },
           "host": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Host",
@@ -5408,7 +5416,16 @@
           }
         },
         "type": "object",
-        "required": ["id", "provider", "type", "title", "scopes", "username"],
+        "required": [
+          "id",
+          "provider",
+          "type",
+          "title",
+          "scopes",
+          "username",
+          "api_key",
+          "expires_at"
+        ],
         "title": "CredentialsMetaResponse"
       },
       "CreditTransactionType": {

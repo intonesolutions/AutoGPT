@@ -590,8 +590,8 @@ class Block(ABC, Generic[BlockSchemaInputType, BlockSchemaOutputType]):
             uiType=self.block_type.value,
         )
 
-    async def execute(self, input_data: BlockInput, **kwargs) -> BlockOutput:
-    def execute(self,input_data:BlockInput,**kwargs) ->BlockOutput:
+    #async def execute(self, input_data: BlockInput, **kwargs) -> BlockOutput:
+    async def execute(self,input_data:BlockInput,**kwargs) ->BlockOutput:
         # retreive variables within the context of this execution here
         # then process the input data so any reference to {{variable_name}} is replaced with the value of the variable
         graph_exec_id=kwargs['graph_exec_id']
@@ -644,12 +644,12 @@ class Block(ABC, Generic[BlockSchemaInputType, BlockSchemaOutputType]):
             vars=[SimpleNamespace(**item) for item in vars]
             input_data=replace_vars(input_data,vars) 
         kwargs["variables"]=vars
-        for output_name, output_data in self._execute(input_data,**kwargs):
+        async for output_name, output_data in self._execute(input_data,**kwargs):
             if vars:
                 output_data=replace_vars(output_data,vars)
             yield output_name, output_data
         
-    def _execute(self, input_data: BlockInput, **kwargs) -> BlockOutput:
+    async def _execute(self, input_data: BlockInput, **kwargs) -> BlockOutput:
         if error := self.input_schema.validate_data(input_data):
             raise ValueError(
                 f"Unable to execute block with invalid input data: {error}"

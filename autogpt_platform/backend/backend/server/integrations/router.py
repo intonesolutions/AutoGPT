@@ -194,8 +194,8 @@ async def list_credentials(
             title=cred.title,
             scopes=cred.scopes if isinstance(cred, OAuth2Credentials) else None,
             username=cred.username if isinstance(cred, OAuth2Credentials) else None,
-            api_key=cred.api_key.get_secret_value() if cred.api_key is not None else None,
-            expires_at=cred.expires_at
+            api_key=(cred.api_key.get_secret_value() if getattr(cred, "api_key", None) else None),
+            expires_at=cred.expires_at,
             host=cred.host if isinstance(cred, HostScopedCredentials) else None,
         )
         for cred in credentials
