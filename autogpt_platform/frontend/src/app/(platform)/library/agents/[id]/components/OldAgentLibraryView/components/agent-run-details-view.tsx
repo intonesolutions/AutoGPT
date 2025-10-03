@@ -254,7 +254,7 @@ export function AgentRunDetailsView({
 
           <CardContent>
             <div>
-              Run id: {run.execution_id}
+              {/* Run id: {run.execution_id} */}
             </div>
             <div className="flex justify-stretch gap-4">
               {infoStats.map(({ label, value }) => (

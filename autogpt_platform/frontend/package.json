@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev0": "pnpm run generate:api:force && next dev --turbo",
-    "dev": "npm run generate:api:force && set NODE_OPTIONS=--inspect && next dev",
+    "dev": "pnpm run generate:api:force && set NODE_OPTIONS=--inspect && next dev",
     "eks":"NODE_ENV=eks && next dev",
     "build": "next build",
     "start": "next start",
