@@ -119,7 +119,7 @@ export default function useCredentials(
 
   return {
     ...provider,
-    provider: providerName,
+    provider: providerName||'',
     schema: credsInputSchema,
     supportsApiKey,
     supportsOAuth2,

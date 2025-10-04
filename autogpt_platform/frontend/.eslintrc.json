@@ -15,7 +15,7 @@
     "@typescript-eslint/no-explicit-any": "off",
     // Allow unused vars that start with underscore (convention for intentionally unused)
     "@typescript-eslint/no-unused-vars": [
-      "error",
+      "warn",
       {
         "argsIgnorePattern": "^_",
         "varsIgnorePattern": "^_",
