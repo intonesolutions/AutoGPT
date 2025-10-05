@@ -1,0 +1,7 @@
+
+rm -Force -Recurse -Confirm:$false node_modules
+rm -Force -Recurse -Confirm:$false .next
+pnpm install
+
+pnpm run generate:api:force
+pnpm build
