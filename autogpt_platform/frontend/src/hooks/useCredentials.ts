@@ -77,8 +77,7 @@ export default function useCredentials(
   const supportsApiKey = credsInputSchema.credentials_types?credsInputSchema.credentials_types.includes("api_key"):false;
   const supportsOAuth2 = credsInputSchema.credentials_types?credsInputSchema.credentials_types.includes("oauth2"):false;
   const supportsUserPassword =credsInputSchema.credentials_types? credsInputSchema.credentials_types.includes("user_password"):false;
-  const supportsHostScoped =
-    credsInputSchema.credentials_types.includes("host_scoped");
+  const supportsHostScoped =credsInputSchema.credentials_types?credsInputSchema.credentials_types.includes("host_scoped"):false;
 
   // No provider means maybe it's still loading
   if (!provider) {

@@ -37,8 +37,8 @@ jobs:
         run: |
           cd autogpt_platform/frontend
           mv -f .env.eks .env.local
-          npm install --legacy-peer-deps
-          npm run build
+          pnpm install --legacy-peer-deps
+          pnpm run build
           docker build -t $IMAGE_NAME -f ./Dockerfile .
 
       - name: Tag Docker image
