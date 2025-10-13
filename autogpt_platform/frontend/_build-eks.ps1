@@ -1,7 +1,8 @@
 
 rm -Force -Recurse -Confirm:$false node_modules
 rm -Force -Recurse -Confirm:$false .next
-pnpm install
 
-pnpm run generate:api:force
-pnpm build
+cp -Force .env.dev .env.local
+npm install
+# pnpm run generate:api:force
+npm build

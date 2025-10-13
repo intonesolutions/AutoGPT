@@ -1,0 +1,12 @@
+# deps & caches
+node_modules
+.pnpm-store
+**/.pnpm-store
+**/node_modules
+# builds
+# .next
+dist
+build
+# misc
+.git
+*.log

@@ -38,8 +38,8 @@ export default function CreditsPage() {
     fetchInitialTransactionHistory: true,
   });
   const router = useRouter();
-  //const searchParams = useSearchParams();
-  const topupStatus =null;// searchParams.get("topup") as "success" | "cancel" | null;
+  const searchParams = useSearchParams();
+  const topupStatus =searchParams.get("topup") as "success" | "cancel" | null;
   const { toast } = useToast();
   const toastOnFail = useToastOnFail();
 
