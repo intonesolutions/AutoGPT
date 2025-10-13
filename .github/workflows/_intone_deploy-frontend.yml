@@ -37,7 +37,7 @@ jobs:
         run: |
           cd autogpt_platform/frontend
           mv -f .env.eks .env.local
-          npm install
+          npm install --legacy-peer-deps
           npm build
           docker build -t $IMAGE_NAME -f ./Dockerfile .
 
