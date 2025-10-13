@@ -290,7 +290,7 @@ export default function LibraryAgentCard({
               src={
                 creator_image_url
                   ? creator_image_url
-                  : "/avatar-placeholder.png"
+                  : "/placeholder.png"
               }
               alt={`${name} creator avatar`}
             />
