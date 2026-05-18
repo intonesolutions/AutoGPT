@@ -23,7 +23,7 @@ spec:
         - image: 582822331796.dkr.ecr.us-east-1.amazonaws.com/autogpt/platform/backend:latest
           resources:
             requests:
-              memory: "4Gi"
+              memory: "2Gi"
             # limits:
             #   memory: "2Gi"
           #command: ["/bin/sh", "-c", "sleep infinity"] # poetry run app
