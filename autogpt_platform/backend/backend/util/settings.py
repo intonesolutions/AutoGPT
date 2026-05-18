@@ -31,12 +31,12 @@ class UpdateTrackingModel(BaseModel, Generic[T]):
     _updated_fields: Set[str] = PrivateAttr(default_factory=set)
 
     def __setattr__(self, name: str, value) -> None:
-        if name in self.model_fields:
+        if name in UpdateTrackingModel.model_fields:
             self._updated_fields.add(name)
         super().__setattr__(name, value)
 
     def mark_updated(self, field_name: str) -> None:
-        if field_name in self.model_fields:
+        if field_name in UpdateTrackingModel.model_fields:
             self._updated_fields.add(field_name)
 
     def clear_updates(self) -> None:
@@ -59,15 +59,18 @@ class Config(UpdateTrackingModel["Config"], BaseSettings):
         le=1000,
         description="Maximum number of workers to use for graph execution.",
     )
-    num_node_workers: int = Field(
-        default=5,
-        ge=1,
-        le=1000,
-        description="Maximum number of workers to use for node execution within a single graph.",
-    )
-    use_http_based_rpc: bool = Field(
-        default=True,
-        description="Whether to use HTTP-based RPC for communication between services.",
+
+    # FastAPI Thread Pool Configuration
+    # IMPORTANT: FastAPI automatically offloads ALL sync functions to a thread pool:
+    # - Sync endpoint functions (def instead of async def)
+    # - Sync dependency functions (def instead of async def)
+    # - Manually called run_in_threadpool() operations
+    # Default thread pool size is only 40, which becomes a bottleneck under high concurrency
+    fastapi_thread_pool_size: int = Field(
+        default=60,
+        ge=40,
+        le=500,
+        description="Thread pool size for FastAPI sync operations. All sync endpoints and dependencies automatically use this pool. Higher values support more concurrent sync operations but use more memory.",
     )
     pyro_host: str = Field(
         default="localhost",
@@ -78,8 +81,12 @@ class Config(UpdateTrackingModel["Config"], BaseSettings):
         description="The default timeout in seconds, for Pyro client connections.",
     )
     pyro_client_comm_retry: int = Field(
-        default=3,
+        default=100,
         description="The default number of retries for Pyro client connections.",
+    )
+    pyro_client_max_wait: float = Field(
+        default=30.0,
+        description="The maximum wait time in seconds for Pyro client retries.",
     )
     rpc_client_call_timeout: int = Field(
         default=300,
@@ -105,6 +112,10 @@ class Config(UpdateTrackingModel["Config"], BaseSettings):
         default=500,
         description="Maximum number of credits above the balance to be auto-approved.",
     )
+    low_balance_threshold: int = Field(
+        default=500,
+        description="Credit threshold for low balance notifications (100 = $1, default 500 = $5)",
+    )
     refund_notification_email: str = Field(
         default="refund@agpt.co",
         description="Email address to send refund notifications to.",
@@ -112,6 +123,43 @@ class Config(UpdateTrackingModel["Config"], BaseSettings):
     refund_request_time_key_format: str = Field(
         default="%Y-%W",  # This will allow for weekly refunds per user.
         description="Time key format for refund requests.",
+    )
+    execution_cost_count_threshold: int = Field(
+        default=100,
+        description="Number of executions after which the cost is calculated.",
+    )
+    execution_cost_per_threshold: int = Field(
+        default=1,
+        description="Cost per execution in cents after each threshold.",
+    )
+    execution_counter_expiration_time: int = Field(
+        default=60 * 60 * 24,
+        description="Time in seconds after which the execution counter is reset.",
+    )
+    execution_late_notification_threshold_secs: int = Field(
+        default=5 * 60,
+        description="Time in seconds after which the execution stuck on QUEUED status is considered late.",
+    )
+    cluster_lock_timeout: int = Field(
+        default=300,
+        description="Cluster lock timeout in seconds for graph execution coordination.",
+    )
+    execution_late_notification_checkrange_secs: int = Field(
+        default=60 * 60,
+        description="Time in seconds for how far back to check for the late executions.",
+    )
+
+    block_error_rate_threshold: float = Field(
+        default=0.5,
+        description="Error rate threshold (0.0-1.0) for triggering block error alerts.",
+    )
+    block_error_rate_check_interval_secs: int = Field(
+        default=24 * 60 * 60,  # 24 hours
+        description="Interval in seconds between block error rate checks.",
+    )
+    block_error_include_top_blocks: int = Field(
+        default=3,
+        description="Number of top blocks with most errors to show when no blocks exceed threshold (0 to disable).",
     )
 
     model_config = SettingsConfigDict(
@@ -219,6 +267,88 @@ class Config(UpdateTrackingModel["Config"], BaseSettings):
         default=True,
         description="Whether to use the new agent image generation service",
     )
+    enable_agent_input_subtype_blocks: bool = Field(
+        default=True,
+        description="Whether to enable the agent input subtype blocks",
+    )
+    platform_alert_discord_channel: str = Field(
+        default="local-alerts",
+        description="The Discord channel for the platform",
+    )
+    product_alert_discord_channel: str = Field(
+        default="product-alerts",
+        description="The Discord channel for product alerts (low balance, zero balance, etc.)",
+    )
+
+    clamav_service_host: str = Field(
+        default="localhost",
+        description="The host for the ClamAV daemon",
+    )
+    clamav_service_port: int = Field(
+        default=3310,
+        description="The port for the ClamAV daemon",
+    )
+    clamav_service_timeout: int = Field(
+        default=60,
+        description="The timeout in seconds for the ClamAV daemon",
+    )
+    clamav_service_enabled: bool = Field(
+        default=True,
+        description="Whether virus scanning is enabled or not",
+    )
+    clamav_max_concurrency: int = Field(
+        default=10,
+        description="The maximum number of concurrent scans to perform",
+    )
+    clamav_mark_failed_scans_as_clean: bool = Field(
+        default=False,
+        description="Whether to mark failed scans as clean or not",
+    )
+
+    enable_example_blocks: bool = Field(
+        default=False,
+        description="Whether to enable example blocks in production",
+    )
+
+    cloud_storage_cleanup_interval_hours: int = Field(
+        default=6,
+        ge=1,
+        le=24,
+        description="Hours between cloud storage cleanup runs (1-24 hours)",
+    )
+
+    upload_file_size_limit_mb: int = Field(
+        default=256,
+        ge=1,
+        le=1024,
+        description="Maximum file size in MB for file uploads (1-1024 MB)",
+    )
+
+    # AutoMod configuration
+    automod_enabled: bool = Field(
+        default=False,
+        description="Whether AutoMod content moderation is enabled",
+    )
+    automod_api_url: str = Field(
+        default="",
+        description="AutoMod API base URL - Make sure it ends in /api",
+    )
+    automod_timeout: int = Field(
+        default=30,
+        description="Timeout in seconds for AutoMod API requests",
+    )
+    automod_retry_attempts: int = Field(
+        default=3,
+        description="Number of retry attempts for AutoMod API requests",
+    )
+    automod_retry_delay: float = Field(
+        default=1.0,
+        description="Delay between retries for AutoMod API requests in seconds",
+    )
+    automod_fail_open: bool = Field(
+        default=False,
+        description="If True, allow execution to continue if AutoMod fails",
+    )
 
     @field_validator("platform_base_url", "frontend_base_url")
     @classmethod
@@ -254,7 +384,12 @@ class Config(UpdateTrackingModel["Config"], BaseSettings):
         description="A whitelist of trusted internal endpoints for the backend to make requests to.",
     )
 
-    backend_cors_allow_origins: List[str] = Field(default_factory=list)
+    max_message_size_limit: int = Field(
+        default=16 * 1024 * 1024,  # 16 MB
+        description="Maximum message size limit for communication with the message bus",
+    )
+
+    backend_cors_allow_origins: List[str] = Field(default=["http://localhost:3000"])
 
     @field_validator("backend_cors_allow_origins")
     @classmethod
@@ -330,6 +465,16 @@ class Secrets(UpdateTrackingModel["Secrets"], BaseSettings):
         description="The secret key to use for the unsubscribe user by token",
     )
 
+    # Cloudflare Turnstile credentials
+    turnstile_secret_key: str = Field(
+        default="",
+        description="Cloudflare Turnstile backend secret key",
+    )
+    turnstile_verify_url: str = Field(
+        default="https://challenges.cloudflare.com/turnstile/v0/siteverify",
+        description="Cloudflare Turnstile verify URL",
+    )
+
     # OAuth server credentials for integrations
     # --8<-- [start:OAuthServerCredentialsExample]
     github_client_id: str = Field(default="", description="GitHub OAuth client ID")
@@ -349,11 +494,21 @@ class Secrets(UpdateTrackingModel["Secrets"], BaseSettings):
     twitter_client_secret: str = Field(
         default="", description="Twitter/X OAuth client secret"
     )
+    discord_client_id: str = Field(default="", description="Discord OAuth client ID")
+    discord_client_secret: str = Field(
+        default="", description="Discord OAuth client secret"
+    )
 
     openai_api_key: str = Field(default="", description="OpenAI API key")
+    openai_internal_api_key: str = Field(
+        default="", description="OpenAI Internal API key"
+    )
+    aiml_api_key: str = Field(default="", description="'AI/ML API' key")
     anthropic_api_key: str = Field(default="", description="Anthropic API key")
     groq_api_key: str = Field(default="", description="Groq API key")
     open_router_api_key: str = Field(default="", description="Open Router API Key")
+    llama_api_key: str = Field(default="", description="Llama API Key")
+    v0_api_key: str = Field(default="", description="v0 by Vercel API key")
 
     reddit_client_id: str = Field(default="", description="Reddit client ID")
     reddit_client_secret: str = Field(default="", description="Reddit client secret")
@@ -403,9 +558,20 @@ class Secrets(UpdateTrackingModel["Secrets"], BaseSettings):
     apollo_api_key: str = Field(default="", description="Apollo API Key")
     smartlead_api_key: str = Field(default="", description="SmartLead API Key")
     zerobounce_api_key: str = Field(default="", description="ZeroBounce API Key")
+    enrichlayer_api_key: str = Field(default="", description="Enrichlayer API Key")
 
+    # AutoMod API credentials
+    automod_api_key: str = Field(default="", description="AutoMod API key")
+
+    # LaunchDarkly feature flags
+    launch_darkly_sdk_key: str = Field(
+        default="",
+        description="The LaunchDarkly SDK key for feature flag management",
+    )
+
+    ayrshare_api_key: str = Field(default="", description="Ayrshare API Key")
+    ayrshare_jwt_key: str = Field(default="", description="Ayrshare private Key")
     # Add more secret fields as needed
-
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

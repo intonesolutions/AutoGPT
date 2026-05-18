@@ -1,15 +1,13 @@
-from .config import Settings
-from .depends import requires_admin_user, requires_user
-from .jwt_utils import parse_jwt_token
-from .middleware import APIKeyValidator, auth_middleware
+from .config import verify_settings
+from .dependencies import get_user_id, requires_admin_user, requires_user
+from .helpers import add_auth_responses_to_openapi
 from .models import User
 
 __all__ = [
-    "Settings",
-    "parse_jwt_token",
-    "requires_user",
+    "verify_settings",
+    "get_user_id",
     "requires_admin_user",
-    "APIKeyValidator",
-    "auth_middleware",
+    "requires_user",
+    "add_auth_responses_to_openapi",
     "User",
 ]

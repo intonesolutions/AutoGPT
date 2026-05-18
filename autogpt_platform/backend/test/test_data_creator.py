@@ -1,10 +1,42 @@
+"""
+Test Data Creator for AutoGPT Platform
+
+This script creates test data for the AutoGPT platform database.
+
+Image/Video URL Domains Used:
+- Images: picsum.photos (for all image URLs - avatars, store listing images, etc.)
+- Videos: youtube.com (for store listing video URLs)
+
+Add these domains to your Next.js config:
+```javascript
+// next.config.js
+images: {
+  domains: ['picsum.photos'],
+}
+```
+"""
+
 import asyncio
 import random
 from datetime import datetime
 
 import prisma.enums
+from autogpt_libs.api_key.keysmith import APIKeySmith
 from faker import Faker
 from prisma import Json, Prisma
+from prisma.types import (
+    AgentBlockCreateInput,
+    AgentGraphCreateInput,
+    AgentNodeCreateInput,
+    AgentNodeLinkCreateInput,
+    AnalyticsDetailsCreateInput,
+    AnalyticsMetricsCreateInput,
+    CreditTransactionCreateInput,
+    IntegrationWebhookCreateInput,
+    ProfileCreateInput,
+    StoreListingReviewCreateInput,
+    UserCreateInput,
+)
 
 faker = Faker()
 
@@ -40,10 +72,26 @@ MAX_REVIEWS_PER_VERSION = 5  # Total reviews depends on number of versions creat
 
 
 def get_image():
-    url = faker.image_url()
-    while "placekitten.com" in url:
-        url = faker.image_url()
-    return url
+    """Generate a consistent image URL using picsum.photos service."""
+    width = random.choice([200, 300, 400, 500, 600, 800])
+    height = random.choice([200, 300, 400, 500, 600, 800])
+    # Use a random seed to get different images
+    seed = random.randint(1, 1000)
+    return f"https://picsum.photos/seed/{seed}/{width}/{height}"
+
+
+def get_video_url():
+    """Generate a consistent video URL using a placeholder service."""
+    # Using YouTube as a consistent source for video URLs
+    video_ids = [
+        "dQw4w9WgXcQ",  # Example video IDs
+        "9bZkp7q19f0",
+        "kJQP7kiw5Fk",
+        "RgKAFK5djSk",
+        "L_jWHffIx5E",
+    ]
+    video_id = random.choice(video_ids)
+    return f"https://www.youtube.com/watch?v={video_id}"
 
 
 async def main():
@@ -55,13 +103,13 @@ async def main():
     users = []
     for _ in range(NUM_USERS):
         user = await db.user.create(
-            data={
-                "id": str(faker.uuid4()),
-                "email": faker.unique.email(),
-                "name": faker.name(),
-                "metadata": prisma.Json({}),
-                "integrations": "",
-            }
+            data=UserCreateInput(
+                id=str(faker.uuid4()),
+                email=faker.unique.email(),
+                name=faker.name(),
+                metadata=prisma.Json({}),
+                integrations="",
+            )
         )
         users.append(user)
 
@@ -70,11 +118,11 @@ async def main():
     print(f"Inserting {NUM_AGENT_BLOCKS} agent blocks")
     for _ in range(NUM_AGENT_BLOCKS):
         block = await db.agentblock.create(
-            data={
-                "name": f"{faker.word()}_{str(faker.uuid4())[:8]}",
-                "inputSchema": "{}",
-                "outputSchema": "{}",
-            }
+            data=AgentBlockCreateInput(
+                name=f"{faker.word()}_{str(faker.uuid4())[:8]}",
+                inputSchema="{}",
+                outputSchema="{}",
+            )
         )
         agent_blocks.append(block)
 
@@ -86,12 +134,12 @@ async def main():
             random.randint(MIN_GRAPHS_PER_USER, MAX_GRAPHS_PER_USER)
         ):  # Adjust the range to create more graphs per user if desired
             graph = await db.agentgraph.create(
-                data={
-                    "name": faker.sentence(nb_words=3),
-                    "description": faker.text(max_nb_chars=200),
-                    "userId": user.id,
-                    "isActive": True,
-                }
+                data=AgentGraphCreateInput(
+                    name=faker.sentence(nb_words=3),
+                    description=faker.text(max_nb_chars=200),
+                    userId=user.id,
+                    isActive=True,
+                )
             )
             agent_graphs.append(graph)
 
@@ -105,13 +153,13 @@ async def main():
         for _ in range(num_nodes):  # Create 5 AgentNodes per graph
             block = random.choice(agent_blocks)
             node = await db.agentnode.create(
-                data={
-                    "agentBlockId": block.id,
-                    "agentGraphId": graph.id,
-                    "agentGraphVersion": graph.version,
-                    "constantInput": Json({}),
-                    "metadata": Json({}),
-                }
+                data=AgentNodeCreateInput(
+                    agentBlockId=block.id,
+                    agentGraphId=graph.id,
+                    agentGraphVersion=graph.version,
+                    constantInput=Json({}),
+                    metadata=Json({}),
+                )
             )
             agent_nodes.append(node)
 
@@ -127,36 +175,65 @@ async def main():
                     "name": faker.sentence(nb_words=3),
                     "description": faker.text(max_nb_chars=200),
                     "userId": user.id,
-                    "agentId": graph.id,
-                    "agentVersion": graph.version,
+                    "agentGraphId": graph.id,
+                    "agentGraphVersion": graph.version,
                     "isActive": True,
                 }
             )
             agent_presets.append(preset)
 
-    # Insert UserAgents
-    user_agents = []
-    print(f"Inserting {NUM_USERS * MAX_AGENTS_PER_USER} user agents")
+    # Insert Profiles first (before LibraryAgents)
+    profiles = []
+    print(f"Inserting {NUM_USERS} profiles")
+    for user in users:
+        profile = await db.profile.create(
+            data=ProfileCreateInput(
+                userId=user.id,
+                name=user.name or faker.name(),
+                username=faker.unique.user_name(),
+                description=faker.text(),
+                links=[faker.url() for _ in range(3)],
+                avatarUrl=get_image(),
+            )
+        )
+        profiles.append(profile)
+
+    # Insert LibraryAgents
+    library_agents = []
+    print("Inserting library agents")
     for user in users:
         num_agents = random.randint(MIN_AGENTS_PER_USER, MAX_AGENTS_PER_USER)
-        for _ in range(num_agents):  # Create 1 LibraryAgent per user
-            graph = random.choice(agent_graphs)
-            preset = random.choice(agent_presets)
-            user_agent = await db.libraryagent.create(
+        # Get a shuffled list of graphs to ensure uniqueness per user
+        available_graphs = agent_graphs.copy()
+        random.shuffle(available_graphs)
+
+        # Limit to available unique graphs
+        num_agents = min(num_agents, len(available_graphs))
+
+        for i in range(num_agents):
+            graph = available_graphs[i]  # Use unique graph for each library agent
+
+            # Get creator profile for this graph's owner
+            creator_profile = next(
+                (p for p in profiles if p.userId == graph.userId), None
+            )
+
+            library_agent = await db.libraryagent.create(
                 data={
                     "userId": user.id,
-                    "agentId": graph.id,
-                    "agentVersion": graph.version,
-                    "agentPresetId": preset.id,
+                    "agentGraphId": graph.id,
+                    "agentGraphVersion": graph.version,
+                    "creatorId": creator_profile.id if creator_profile else None,
+                    "imageUrl": get_image() if random.random() < 0.5 else None,
+                    "useGraphIsActiveVersion": random.choice([True, False]),
                     "isFavorite": random.choice([True, False]),
                     "isCreatedByUser": random.choice([True, False]),
                     "isArchived": random.choice([True, False]),
                     "isDeleted": random.choice([True, False]),
                 }
             )
-            user_agents.append(user_agent)
+            library_agents.append(library_agent)
 
-    # Insert AgentGraphExecutions
     # Insert AgentGraphExecutions
     agent_graph_executions = []
     print(
@@ -169,7 +246,7 @@ async def main():
             MIN_EXECUTIONS_PER_GRAPH, MAX_EXECUTIONS_PER_GRAPH
         )
         for _ in range(num_executions):
-            matching_presets = [p for p in agent_presets if p.agentId == graph.id]
+            matching_presets = [p for p in agent_presets if p.agentGraphId == graph.id]
             preset = (
                 random.choice(matching_presets)
                 if matching_presets and random.random() < 0.5
@@ -253,13 +330,13 @@ async def main():
             source_node = nodes[0]
             sink_node = nodes[1]
             await db.agentnodelink.create(
-                data={
-                    "agentNodeSourceId": source_node.id,
-                    "sourceName": "output1",
-                    "agentNodeSinkId": sink_node.id,
-                    "sinkName": "input1",
-                    "isStatic": False,
-                }
+                data=AgentNodeLinkCreateInput(
+                    agentNodeSourceId=source_node.id,
+                    sourceName="output1",
+                    agentNodeSinkId=sink_node.id,
+                    sinkName="input1",
+                    isStatic=False,
+                )
             )
 
     # Insert AnalyticsDetails
@@ -267,12 +344,12 @@ async def main():
     for user in users:
         for _ in range(1):
             await db.analyticsdetails.create(
-                data={
-                    "userId": user.id,
-                    "type": faker.word(),
-                    "data": prisma.Json({}),
-                    "dataIndex": faker.word(),
-                }
+                data=AnalyticsDetailsCreateInput(
+                    userId=user.id,
+                    type=faker.word(),
+                    data=prisma.Json({}),
+                    dataIndex=faker.word(),
+                )
             )
 
     # Insert AnalyticsMetrics
@@ -280,12 +357,12 @@ async def main():
     for user in users:
         for _ in range(1):
             await db.analyticsmetrics.create(
-                data={
-                    "userId": user.id,
-                    "analyticMetric": faker.word(),
-                    "value": random.uniform(0, 100),
-                    "dataString": faker.word(),
-                }
+                data=AnalyticsMetricsCreateInput(
+                    userId=user.id,
+                    analyticMetric=faker.word(),
+                    value=random.uniform(0, 100),
+                    dataString=faker.word(),
+                )
             )
 
     # Insert CreditTransaction (formerly UserBlockCredit)
@@ -294,76 +371,67 @@ async def main():
         for _ in range(1):
             block = random.choice(agent_blocks)
             await db.credittransaction.create(
-                data={
-                    "transactionKey": str(faker.uuid4()),
-                    "userId": user.id,
-                    "amount": random.randint(1, 100),
-                    "type": (
+                data=CreditTransactionCreateInput(
+                    transactionKey=str(faker.uuid4()),
+                    userId=user.id,
+                    amount=random.randint(1, 100),
+                    type=(
                         prisma.enums.CreditTransactionType.TOP_UP
                         if random.random() < 0.5
                         else prisma.enums.CreditTransactionType.USAGE
                     ),
-                    "metadata": prisma.Json({}),
-                }
+                    metadata=prisma.Json({}),
+                )
             )
-
-    # Insert Profiles
-    profiles = []
-    print(f"Inserting {NUM_USERS} profiles")
-    for user in users:
-        profile = await db.profile.create(
-            data={
-                "userId": user.id,
-                "name": user.name or faker.name(),
-                "username": faker.unique.user_name(),
-                "description": faker.text(),
-                "links": [faker.url() for _ in range(3)],
-                "avatarUrl": get_image(),
-            }
-        )
-        profiles.append(profile)
 
     # Insert StoreListings
     store_listings = []
-    print(f"Inserting {NUM_USERS} store listings")
+    print("Inserting store listings")
     for graph in agent_graphs:
         user = random.choice(users)
+        slug = faker.slug()
         listing = await db.storelisting.create(
             data={
-                "agentId": graph.id,
-                "agentVersion": graph.version,
+                "agentGraphId": graph.id,
+                "agentGraphVersion": graph.version,
                 "owningUserId": user.id,
-                "isApproved": random.choice([True, False]),
+                "hasApprovedVersion": random.choice([True, False]),
+                "slug": slug,
             }
         )
         store_listings.append(listing)
 
     # Insert StoreListingVersions
     store_listing_versions = []
-    print(f"Inserting {NUM_USERS} store listing versions")
+    print("Inserting store listing versions")
     for listing in store_listings:
-        graph = [g for g in agent_graphs if g.id == listing.agentId][0]
+        graph = [g for g in agent_graphs if g.id == listing.agentGraphId][0]
         version = await db.storelistingversion.create(
             data={
-                "agentId": graph.id,
-                "agentVersion": graph.version,
-                "slug": faker.slug(),
+                "agentGraphId": graph.id,
+                "agentGraphVersion": graph.version,
                 "name": graph.name or faker.sentence(nb_words=3),
                 "subHeading": faker.sentence(),
-                "videoUrl": faker.url(),
+                "videoUrl": get_video_url() if random.random() < 0.3 else None,
                 "imageUrls": [get_image() for _ in range(3)],
                 "description": faker.text(),
                 "categories": [faker.word() for _ in range(3)],
                 "isFeatured": random.choice([True, False]),
                 "isAvailable": True,
-                "isApproved": random.choice([True, False]),
                 "storeListingId": listing.id,
+                "submissionStatus": random.choice(
+                    [
+                        prisma.enums.SubmissionStatus.PENDING,
+                        prisma.enums.SubmissionStatus.APPROVED,
+                        prisma.enums.SubmissionStatus.REJECTED,
+                    ]
+                ),
             }
         )
         store_listing_versions.append(version)
 
     # Insert StoreListingReviews
-    print(f"Inserting {NUM_USERS * MAX_REVIEWS_PER_VERSION} store listing reviews")
+    print("Inserting store listing reviews")
     for version in store_listing_versions:
         # Create a copy of users list and shuffle it to avoid duplicates
         available_reviewers = users.copy()
@@ -378,45 +446,112 @@ async def main():
         # Take only the first num_reviews reviewers
         for reviewer in available_reviewers[:num_reviews]:
             await db.storelistingreview.create(
+                data=StoreListingReviewCreateInput(
+                    storeListingVersionId=version.id,
+                    reviewByUserId=reviewer.id,
+                    score=random.randint(1, 5),
+                    comments=faker.text(),
+                )
+            )
+
+    # Insert UserOnboarding for some users
+    print("Inserting user onboarding data")
+    for user in random.sample(
+        users, k=int(NUM_USERS * 0.7)
+    ):  # 70% of users have onboarding data
+        completed_steps = []
+        possible_steps = list(prisma.enums.OnboardingStep)
+        # Randomly complete some steps
+        if random.random() < 0.8:
+            num_steps = random.randint(1, len(possible_steps))
+            completed_steps = random.sample(possible_steps, k=num_steps)
+
+        try:
+            await db.useronboarding.create(
                 data={
-                    "storeListingVersionId": version.id,
-                    "reviewByUserId": reviewer.id,
-                    "score": random.randint(1, 5),
-                    "comments": faker.text(),
+                    "userId": user.id,
+                    "completedSteps": completed_steps,
+                    "walletShown": random.choice([True, False]),
+                    "notified": (
+                        random.sample(completed_steps, k=min(3, len(completed_steps)))
+                        if completed_steps
+                        else []
+                    ),
+                    "rewardedFor": (
+                        random.sample(completed_steps, k=min(2, len(completed_steps)))
+                        if completed_steps
+                        else []
+                    ),
+                    "usageReason": (
+                        random.choice(["personal", "business", "research", "learning"])
+                        if random.random() < 0.7
+                        else None
+                    ),
+                    "integrations": random.sample(
+                        ["github", "google", "discord", "slack"], k=random.randint(0, 2)
+                    ),
+                    "otherIntegrations": (
+                        faker.word() if random.random() < 0.2 else None
+                    ),
+                    "selectedStoreListingVersionId": (
+                        random.choice(store_listing_versions).id
+                        if store_listing_versions and random.random() < 0.5
+                        else None
+                    ),
+                    "agentInput": (
+                        Json({"test": "data"}) if random.random() < 0.3 else None
+                    ),
+                    "onboardingAgentExecutionId": (
+                        random.choice(agent_graph_executions).id
+                        if agent_graph_executions and random.random() < 0.3
+                        else None
+                    ),
+                    "agentRuns": random.randint(0, 10),
+                }
+            )
+        except Exception as e:
+            print(f"Error creating onboarding for user {user.id}: {e}")
+            # Try simpler version
+            await db.useronboarding.create(
+                data={
+                    "userId": user.id,
                 }
             )
 
-    # Insert StoreListingSubmissions
-    print(f"Inserting {NUM_USERS} store listing submissions")
-    for listing in store_listings:
-        version = random.choice(store_listing_versions)
-        reviewer = random.choice(users)
-        status: prisma.enums.SubmissionStatus = random.choice(
-            [
-                prisma.enums.SubmissionStatus.PENDING,
-                prisma.enums.SubmissionStatus.APPROVED,
-                prisma.enums.SubmissionStatus.REJECTED,
-            ]
-        )
-        await db.storelistingsubmission.create(
-            data={
-                "storeListingId": listing.id,
-                "storeListingVersionId": version.id,
-                "reviewerId": reviewer.id,
-                "Status": status,
-                "reviewComments": faker.text(),
-            }
-        )
+    # Insert IntegrationWebhooks for some users
+    print("Inserting integration webhooks")
+    for user in random.sample(
+        users, k=int(NUM_USERS * 0.3)
+    ):  # 30% of users have webhooks
+        for _ in range(random.randint(1, 3)):
+            await db.integrationwebhook.create(
+                data=IntegrationWebhookCreateInput(
+                    userId=user.id,
+                    provider=random.choice(["github", "slack", "discord"]),
+                    credentialsId=str(faker.uuid4()),
+                    webhookType=random.choice(["repo", "channel", "server"]),
+                    resource=faker.slug(),
+                    events=[
+                        random.choice(["created", "updated", "deleted"])
+                        for _ in range(random.randint(1, 3))
+                    ],
+                    config=prisma.Json({"url": faker.url()}),
+                    secret=str(faker.sha256()),
+                    providerWebhookId=str(faker.uuid4()),
+                )
+            )
 
     # Insert APIKeys
     print(f"Inserting {NUM_USERS} api keys")
     for user in users:
+        api_key = APIKeySmith().generate_key()
         await db.apikey.create(
             data={
                 "name": faker.word(),
-                "prefix": str(faker.uuid4())[:8],
-                "postfix": str(faker.uuid4())[-8:],
-                "key": str(faker.sha256()),
+                "head": api_key.head,
+                "tail": api_key.tail,
+                "hash": api_key.hash,
+                "salt": api_key.salt,
                 "status": prisma.enums.APIKeyStatus.ACTIVE,
                 "permissions": [
                     prisma.enums.APIKeyPermission.EXECUTE_GRAPH,
@@ -427,7 +562,12 @@ async def main():
             }
         )
 
+    # Refresh materialized views
+    print("Refreshing materialized views...")
+    await db.execute_raw("SELECT refresh_store_materialized_views();")
+
     await db.disconnect()
+    print("Test data creation completed successfully!")
 
 
 if __name__ == "__main__":

@@ -7,22 +7,28 @@ from typing import Optional, cast
 from urllib.parse import quote_plus
 
 from autogpt_libs.auth.models import DEFAULT_USER_ID
+from autogpt_libs.utils.cache import cached
 from fastapi import HTTPException
-from prisma import Json
 from prisma.enums import NotificationType
-from prisma.models import User
-from prisma.types import UserUpdateInput
+from prisma.models import User as PrismaUser
+from prisma.types import JsonFilter, UserCreateInput, UserUpdateInput
 
 from backend.data.db import prisma
-from backend.data.model import UserIntegrations, UserMetadata, UserMetadataRaw
+from backend.data.model import User, UserIntegrations, UserMetadata
 from backend.data.notifications import NotificationPreference, NotificationPreferenceDTO
 from backend.server.v2.store.exceptions import DatabaseError
 from backend.util.encryption import JSONCryptor
+from backend.util.json import SafeJson
 from backend.util.settings import Settings
 
 logger = logging.getLogger(__name__)
+settings = Settings()
+
+# Cache decorator alias for consistent user lookup caching
+cache_user_lookup = cached(maxsize=1000, ttl_seconds=300)
 
 
+@cache_user_lookup
 async def get_or_create_user(user_data: dict) -> User:
     try:
         user_id = user_data.get("sub")
@@ -36,23 +42,24 @@ async def get_or_create_user(user_data: dict) -> User:
         user = await prisma.user.find_unique(where={"id": user_id})
         if not user:
             user = await prisma.user.create(
-                data={
-                    "id": user_id,
-                    "email": user_email,
-                    "name": user_data.get("user_metadata", {}).get("name"),
-                }
+                data=UserCreateInput(
+                    id=user_id,
+                    email=user_email,
+                    name=user_data.get("user_metadata", {}).get("name"),
+                )
             )
 
-        return User.model_validate(user)
+        return User.from_db(user)
     except Exception as e:
         raise DatabaseError(f"Failed to get or create user {user_data}: {e}") from e
 
 
+@cache_user_lookup
 async def get_user_by_id(user_id: str) -> User:
     user = await prisma.user.find_unique(where={"id": user_id})
     if not user:
         raise ValueError(f"User not found with ID: {user_id}")
-    return User.model_validate(user)
+    return User.from_db(user)
 
 
 async def get_user_email_by_id(user_id: str) -> Optional[str]:
@@ -63,17 +70,28 @@ async def get_user_email_by_id(user_id: str) -> Optional[str]:
         raise DatabaseError(f"Failed to get user email for user {user_id}: {e}") from e
 
 
+@cache_user_lookup
 async def get_user_by_email(email: str) -> Optional[User]:
     try:
         user = await prisma.user.find_unique(where={"email": email})
-        return User.model_validate(user) if user else None
+        return User.from_db(user) if user else None
     except Exception as e:
         raise DatabaseError(f"Failed to get user by email {email}: {e}") from e
 
 
 async def update_user_email(user_id: str, email: str):
     try:
+        # Get old email first for cache invalidation
+        old_user = await prisma.user.find_unique(where={"id": user_id})
+        old_email = old_user.email if old_user else None
+
         await prisma.user.update(where={"id": user_id}, data={"email": email})
+
+        # Selectively invalidate only the specific user entries
+        get_user_by_id.cache_delete(user_id)
+        if old_email:
+            get_user_by_email.cache_delete(old_email)
+        get_user_by_email.cache_delete(email)
     except Exception as e:
         raise DatabaseError(
             f"Failed to update user email for user {user_id}: {e}"
@@ -84,33 +102,17 @@ async def create_default_user() -> Optional[User]:
     user = await prisma.user.find_unique(where={"id": DEFAULT_USER_ID})
     if not user:
         user = await prisma.user.create(
-            data={
-                "id": DEFAULT_USER_ID,
-                "email": "default@example.com",
-                "name": "Default User",
-            }
+            data=UserCreateInput(
+                id=DEFAULT_USER_ID,
+                email="default@example.com",
+                name="Default User",
+            )
         )
-    return User.model_validate(user)
-
-
-async def get_user_metadata(user_id: str) -> UserMetadata:
-    user = await User.prisma().find_unique_or_raise(
-        where={"id": user_id},
-    )
-
-    metadata = cast(UserMetadataRaw, user.metadata)
-    return UserMetadata.model_validate(metadata)
-
-
-async def update_user_metadata(user_id: str, metadata: UserMetadata):
-    await User.prisma().update(
-        where={"id": user_id},
-        data={"metadata": Json(metadata.model_dump())},
-    )
+    return User.from_db(user)
 
 
 async def get_user_integrations(user_id: str) -> UserIntegrations:
-    user = await User.prisma().find_unique_or_raise(
+    user = await PrismaUser.prisma().find_unique_or_raise(
         where={"id": user_id},
     )
 
@@ -124,27 +126,34 @@ async def get_user_integrations(user_id: str) -> UserIntegrations:
 
 
 async def update_user_integrations(user_id: str, data: UserIntegrations):
-    encrypted_data = JSONCryptor().encrypt(data.model_dump())
-    await User.prisma().update(
+    encrypted_data = JSONCryptor().encrypt(data.model_dump(exclude_none=True))
+    await PrismaUser.prisma().update(
         where={"id": user_id},
         data={"integrations": encrypted_data},
     )
+    # Invalidate cache for this user
+    get_user_by_id.cache_delete(user_id)
 
 
 async def migrate_and_encrypt_user_integrations():
     """Migrate integration credentials and OAuth states from metadata to integrations column."""
-    users = await User.prisma().find_many(
+    users = await PrismaUser.prisma().find_many(
         where={
-            "metadata": {
-                "path": ["integration_credentials"],
-                "not": Json({"a": "yolo"}),  # bogus value works to check if key exists
-            }  # type: ignore
+            "metadata": cast(
+                JsonFilter,
+                {
+                    "path": ["integration_credentials"],
+                    "not": SafeJson(
+                        {"a": "yolo"}
+                    ),  # bogus value works to check if key exists
+                },
+            )
         }
     )
     logger.info(f"Migrating integration credentials for {len(users)} users")
 
     for user in users:
-        raw_metadata = cast(UserMetadataRaw, user.metadata)
+        raw_metadata = cast(dict, user.metadata)
         metadata = UserMetadata.model_validate(raw_metadata)
 
         # Get existing integrations data
@@ -160,20 +169,19 @@ async def migrate_and_encrypt_user_integrations():
         await update_user_integrations(user_id=user.id, data=integrations)
 
         # Remove from metadata
-        raw_metadata = dict(raw_metadata)
         raw_metadata.pop("integration_credentials", None)
         raw_metadata.pop("integration_oauth_states", None)
 
         # Update metadata without integration data
-        await User.prisma().update(
+        await PrismaUser.prisma().update(
             where={"id": user.id},
-            data={"metadata": Json(raw_metadata)},
+            data={"metadata": SafeJson(raw_metadata)},
         )
 
 
 async def get_active_user_ids_in_timerange(start_time: str, end_time: str) -> list[str]:
     try:
-        users = await User.prisma().find_many(
+        users = await PrismaUser.prisma().find_many(
             where={
                 "AgentGraphExecutions": {
                     "some": {
@@ -203,7 +211,7 @@ async def get_active_users_ids() -> list[str]:
 
 async def get_user_notification_preference(user_id: str) -> NotificationPreference:
     try:
-        user = await User.prisma().find_unique_or_raise(
+        user = await PrismaUser.prisma().find_unique_or_raise(
             where={"id": user_id},
         )
 
@@ -219,6 +227,8 @@ async def get_user_notification_preference(user_id: str) -> NotificationPreferen
             NotificationType.DAILY_SUMMARY: user.notifyOnDailySummary or False,
             NotificationType.WEEKLY_SUMMARY: user.notifyOnWeeklySummary or False,
             NotificationType.MONTHLY_SUMMARY: user.notifyOnMonthlySummary or False,
+            NotificationType.AGENT_APPROVED: user.notifyOnAgentApproved or False,
+            NotificationType.AGENT_REJECTED: user.notifyOnAgentRejected or False,
         }
         daily_limit = user.maxEmailsPerDay or 3
         notification_preference = NotificationPreference(
@@ -277,15 +287,27 @@ async def update_user_notification_preference(
             update_data["notifyOnMonthlySummary"] = data.preferences[
                 NotificationType.MONTHLY_SUMMARY
             ]
+        if NotificationType.AGENT_APPROVED in data.preferences:
+            update_data["notifyOnAgentApproved"] = data.preferences[
+                NotificationType.AGENT_APPROVED
+            ]
+        if NotificationType.AGENT_REJECTED in data.preferences:
+            update_data["notifyOnAgentRejected"] = data.preferences[
+                NotificationType.AGENT_REJECTED
+            ]
         if data.daily_limit:
             update_data["maxEmailsPerDay"] = data.daily_limit
 
-        user = await User.prisma().update(
+        user = await PrismaUser.prisma().update(
             where={"id": user_id},
             data=update_data,
         )
         if not user:
             raise ValueError(f"User not found with ID: {user_id}")
+
+        # Invalidate cache for this user since notification preferences are part of user data
+        get_user_by_id.cache_delete(user_id)
+
         preferences: dict[NotificationType, bool] = {
             NotificationType.AGENT_RUN: user.notifyOnAgentRun or True,
             NotificationType.ZERO_BALANCE: user.notifyOnZeroBalance or True,
@@ -297,6 +319,8 @@ async def update_user_notification_preference(
             NotificationType.DAILY_SUMMARY: user.notifyOnDailySummary or True,
             NotificationType.WEEKLY_SUMMARY: user.notifyOnWeeklySummary or True,
             NotificationType.MONTHLY_SUMMARY: user.notifyOnMonthlySummary or True,
+            NotificationType.AGENT_APPROVED: user.notifyOnAgentApproved or True,
+            NotificationType.AGENT_REJECTED: user.notifyOnAgentRejected or True,
         }
         notification_preference = NotificationPreference(
             user_id=user.id,
@@ -318,10 +342,12 @@ async def update_user_notification_preference(
 async def set_user_email_verification(user_id: str, verified: bool) -> None:
     """Set the email verification status for a user."""
     try:
-        await User.prisma().update(
+        await PrismaUser.prisma().update(
             where={"id": user_id},
             data={"emailVerified": verified},
         )
+        # Invalidate cache for this user
+        get_user_by_id.cache_delete(user_id)
     except Exception as e:
         raise DatabaseError(
             f"Failed to set email verification status for user {user_id}: {e}"
@@ -331,7 +357,7 @@ async def set_user_email_verification(user_id: str, verified: bool) -> None:
 async def get_user_email_verification(user_id: str) -> bool:
     """Get the email verification status for a user."""
     try:
-        user = await User.prisma().find_unique_or_raise(
+        user = await PrismaUser.prisma().find_unique_or_raise(
             where={"id": user_id},
         )
         return user.emailVerified
@@ -344,7 +370,7 @@ async def get_user_email_verification(user_id: str) -> bool:
 def generate_unsubscribe_link(user_id: str) -> str:
     """Generate a link to unsubscribe from all notifications"""
     # Create an HMAC using a secret key
-    secret_key = Settings().secrets.unsubscribe_secret_key
+    secret_key = settings.secrets.unsubscribe_secret_key
     signature = hmac.new(
         secret_key.encode("utf-8"), user_id.encode("utf-8"), hashlib.sha256
     ).digest()
@@ -355,7 +381,7 @@ def generate_unsubscribe_link(user_id: str) -> str:
     ).decode("utf-8")
     logger.info(f"Generating unsubscribe link for user {user_id}")
 
-    base_url = Settings().config.platform_base_url
+    base_url = settings.config.platform_base_url
     return f"{base_url}/api/email/unsubscribe?token={quote_plus(token)}"
 
 
@@ -367,7 +393,7 @@ async def unsubscribe_user_by_token(token: str) -> None:
         user_id, received_signature_hex = decoded.split(":", 1)
 
         # Verify the signature
-        secret_key = Settings().secrets.unsubscribe_secret_key
+        secret_key = settings.secrets.unsubscribe_secret_key
         expected_signature = hmac.new(
             secret_key.encode("utf-8"), user_id.encode("utf-8"), hashlib.sha256
         ).digest()
@@ -395,3 +421,21 @@ async def unsubscribe_user_by_token(token: str) -> None:
         )
     except Exception as e:
         raise DatabaseError(f"Failed to unsubscribe user by token {token}: {e}") from e
+
+
+async def update_user_timezone(user_id: str, timezone: str) -> User:
+    """Update a user's timezone setting."""
+    try:
+        user = await PrismaUser.prisma().update(
+            where={"id": user_id},
+            data={"timezone": timezone},
+        )
+        if not user:
+            raise ValueError(f"User not found with ID: {user_id}")
+
+        # Invalidate cache for this user
+        get_user_by_id.cache_delete(user_id)
+
+        return User.from_db(user)
+    except Exception as e:
+        raise DatabaseError(f"Failed to update timezone for user {user_id}: {e}") from e

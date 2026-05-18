@@ -56,7 +56,7 @@ class PineconeInitBlock(Block):
             output_schema=PineconeInitBlock.Output,
         )
 
-    def run(
+    async def run(
         self, input_data: Input, *, credentials: APIKeyCredentials, **kwargs
     ) -> BlockOutput:
         pc = Pinecone(api_key=credentials.api_key.get_secret_value())
@@ -117,7 +117,7 @@ class PineconeQueryBlock(Block):
             output_schema=PineconeQueryBlock.Output,
         )
 
-    def run(
+    async def run(
         self,
         input_data: Input,
         *,
@@ -177,7 +177,8 @@ class PineconeInsertBlock(Block):
             description="Namespace to use in Pinecone", default=""
         )
         metadata: dict = SchemaField(
-            description="Additional metadata to store with each vector", default={}
+            description="Additional metadata to store with each vector",
+            default_factory=dict,
         )
 
     class Output(BlockSchema):
@@ -194,7 +195,7 @@ class PineconeInsertBlock(Block):
             output_schema=PineconeInsertBlock.Output,
         )
 
-    def run(
+    async def run(
         self,
         input_data: Input,
         *,

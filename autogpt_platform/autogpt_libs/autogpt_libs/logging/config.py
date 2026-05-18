@@ -1,6 +1,8 @@
 """Logging module for Auto-GPT."""
 
 import logging
+import os
+import socket
 import sys
 from pathlib import Path
 
@@ -8,7 +10,16 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .filters import BelowLevelFilter
-from .formatters import AGPTFormatter, StructuredLoggingFormatter
+from .formatters import AGPTFormatter
+
+# Configure global socket timeout and gRPC keepalive to prevent deadlocks
+# This must be done at import time before any gRPC connections are established
+socket.setdefaulttimeout(30)  # 30-second socket timeout
+
+# Enable gRPC keepalive to detect dead connections faster
+os.environ.setdefault("GRPC_KEEPALIVE_TIME_MS", "30000")  # 30 seconds
+os.environ.setdefault("GRPC_KEEPALIVE_TIMEOUT_MS", "5000")  # 5 seconds
+os.environ.setdefault("GRPC_KEEPALIVE_PERMIT_WITHOUT_CALLS", "true")
 
 LOG_DIR = Path(__file__).parent.parent.parent.parent / "logs"
 LOG_FILE = "activity.log"
@@ -79,46 +90,45 @@ def configure_logging(force_cloud_logging: bool = False) -> None:
     Note: This function is typically called at the start of the application
     to set up the logging infrastructure.
     """
-
     config = LoggingConfig()
-
     log_handlers: list[logging.Handler] = []
+
+    # Console output handlers
+    stdout = logging.StreamHandler(stream=sys.stdout)
+    stdout.setLevel(config.level)
+    stdout.addFilter(BelowLevelFilter(logging.WARNING))
+    if config.level == logging.DEBUG:
+        stdout.setFormatter(AGPTFormatter(DEBUG_LOG_FORMAT))
+    else:
+        stdout.setFormatter(AGPTFormatter(SIMPLE_LOG_FORMAT))
+
+    stderr = logging.StreamHandler()
+    stderr.setLevel(logging.WARNING)
+    if config.level == logging.DEBUG:
+        stderr.setFormatter(AGPTFormatter(DEBUG_LOG_FORMAT))
+    else:
+        stderr.setFormatter(AGPTFormatter(SIMPLE_LOG_FORMAT))
+
+    log_handlers += [stdout, stderr]
 
     # Cloud logging setup
     if config.enable_cloud_logging or force_cloud_logging:
         import google.cloud.logging
         from google.cloud.logging.handlers import CloudLoggingHandler
-        from google.cloud.logging_v2.handlers.transports.sync import SyncTransport
+        from google.cloud.logging_v2.handlers.transports import (
+            BackgroundThreadTransport,
+        )
 
         client = google.cloud.logging.Client()
+        # Use BackgroundThreadTransport to prevent blocking the main thread
+        # and deadlocks when gRPC calls to Google Cloud Logging hang
         cloud_handler = CloudLoggingHandler(
             client,
             name="autogpt_logs",
-            transport=SyncTransport,
+            transport=BackgroundThreadTransport,
         )
         cloud_handler.setLevel(config.level)
-        cloud_handler.setFormatter(StructuredLoggingFormatter())
         log_handlers.append(cloud_handler)
-        print("Cloud logging enabled")
-    else:
-        # Console output handlers
-        stdout = logging.StreamHandler(stream=sys.stdout)
-        stdout.setLevel(config.level)
-        stdout.addFilter(BelowLevelFilter(logging.WARNING))
-        if config.level == logging.DEBUG:
-            stdout.setFormatter(AGPTFormatter(DEBUG_LOG_FORMAT))
-        else:
-            stdout.setFormatter(AGPTFormatter(SIMPLE_LOG_FORMAT))
-
-        stderr = logging.StreamHandler()
-        stderr.setLevel(logging.WARNING)
-        if config.level == logging.DEBUG:
-            stderr.setFormatter(AGPTFormatter(DEBUG_LOG_FORMAT))
-        else:
-            stderr.setFormatter(AGPTFormatter(SIMPLE_LOG_FORMAT))
-
-        log_handlers += [stdout, stderr]
-        print("Console logging enabled")
 
     # File logging setup
     if config.enable_file_logging:
@@ -156,7 +166,6 @@ def configure_logging(force_cloud_logging: bool = False) -> None:
         error_log_handler.setLevel(logging.ERROR)
         error_log_handler.setFormatter(AGPTFormatter(DEBUG_LOG_FORMAT, no_color=True))
         log_handlers.append(error_log_handler)
-        print("File logging enabled")
 
     # Configure the root logger
     logging.basicConfig(

@@ -1,5 +1,6 @@
 import json
-from typing import Any, Type, TypeVar, cast, get_args, get_origin
+import types
+from typing import Any, Type, TypeVar, Union, cast, get_args, get_origin, overload
 
 from prisma import Json as PrismaJson
 
@@ -104,9 +105,37 @@ def __convert_bool(value: Any) -> bool:
         return bool(value)
 
 
-def _try_convert(value: Any, target_type: Type, raise_on_mismatch: bool) -> Any:
+def _try_convert(value: Any, target_type: Any, raise_on_mismatch: bool) -> Any:
     origin = get_origin(target_type)
     args = get_args(target_type)
+
+    # Handle Union types (including Optional which is Union[T, None])
+    if origin is Union or origin is types.UnionType:
+        # Handle None values for Optional types
+        if value is None:
+            if type(None) in args:
+                return None
+            elif raise_on_mismatch:
+                raise TypeError(f"Value {value} is not of expected type {target_type}")
+            else:
+                return value
+
+        # Try to convert to each type in the union, excluding None
+        non_none_types = [arg for arg in args if arg is not type(None)]
+
+        # Try each type in the union, using the original raise_on_mismatch behavior
+        for arg_type in non_none_types:
+            try:
+                return _try_convert(value, arg_type, raise_on_mismatch)
+            except (TypeError, ValueError, ConversionError):
+                continue
+
+        # If no conversion succeeded
+        if raise_on_mismatch:
+            raise TypeError(f"Value {value} is not of expected type {target_type}")
+        else:
+            return value
+
     if origin is None:
         origin = target_type
     if origin not in [list, dict, tuple, str, set, int, float, bool]:
@@ -182,16 +211,61 @@ def _try_convert(value: Any, target_type: Type, raise_on_mismatch: bool) -> Any:
 
 
 T = TypeVar("T")
+TT = TypeVar("TT")
 
 
 def type_match(value: Any, target_type: Type[T]) -> T:
     return cast(T, _try_convert(value, target_type, raise_on_mismatch=True))
 
 
-def convert(value: Any, target_type: Type[T]) -> T:
+@overload
+def convert(value: Any, target_type: Type[T]) -> T: ...
+
+
+@overload
+def convert(value: Any, target_type: Any) -> Any: ...
+
+
+def convert(value: Any, target_type: Any) -> Any:
     try:
         if isinstance(value, PrismaJson):
             value = value.data
-        return cast(T, _try_convert(value, target_type, raise_on_mismatch=False))
+        return _try_convert(value, target_type, raise_on_mismatch=False)
     except Exception as e:
         raise ConversionError(f"Failed to convert {value} to {target_type}") from e
+
+
+class FormattedStringType(str):
+    string_format: str
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type, handler):
+        _ = source_type  # unused parameter required by pydantic
+        return handler(str)
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema, handler):
+        json_schema = handler(core_schema)
+        json_schema["format"] = cls.string_format
+        return json_schema
+
+
+class MediaFileType(FormattedStringType):
+    """
+    MediaFile is a string that represents a file. It can be one of the following:
+        - Data URI: base64 encoded media file. See https://developer.mozilla.org/en-US/docs/Web/URI/Schemes/data/
+        - URL: Media file hosted on the internet, it starts with http:// or https://.
+        - Local path (anything else): A temporary file path living within graph execution time.
+
+    Note: Replace this type alias into a proper class, when more information is needed.
+    """
+
+    string_format = "file"
+
+
+class LongTextType(FormattedStringType):
+    string_format = "long-text"
+
+
+class ShortTextType(FormattedStringType):
+    string_format = "short-text"

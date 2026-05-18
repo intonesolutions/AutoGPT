@@ -11,13 +11,13 @@ class StepThroughItemsBlock(Block):
             advanced=False,
             description="The list or dictionary of items to iterate over",
             placeholder="[1, 2, 3, 4, 5] or {'key1': 'value1', 'key2': 'value2'}",
-            default=[],
+            default_factory=list,
         )
         items_object: dict = SchemaField(
             advanced=False,
             description="The list or dictionary of items to iterate over",
             placeholder="[1, 2, 3, 4, 5] or {'key1': 'value1', 'key2': 'value2'}",
-            default={},
+            default_factory=dict,
         )
         items_str: str = SchemaField(
             advanced=False,
@@ -53,7 +53,7 @@ class StepThroughItemsBlock(Block):
             test_mock={},
         )
 
-    def run(self, input_data: Input, **kwargs) -> BlockOutput:
+    async def run(self, input_data: Input, **kwargs) -> BlockOutput:
         for data in [input_data.items, input_data.items_object, input_data.items_str]:
             if not data:
                 continue

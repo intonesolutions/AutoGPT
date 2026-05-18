@@ -12,6 +12,7 @@ from backend.data.block import (
     BlockWebhookConfig,
 )
 from backend.data.model import SchemaField
+from backend.integrations.providers import ProviderName
 
 from ._auth import (
     TEST_CREDENTIALS,
@@ -36,7 +37,7 @@ class GitHubTriggerBase:
             placeholder="{owner}/{repo}",
         )
         # --8<-- [start:example-payload-field]
-        payload: dict = SchemaField(hidden=True, default={})
+        payload: dict = SchemaField(hidden=True, default_factory=dict)
         # --8<-- [end:example-payload-field]
 
     class Output(BlockSchema):
@@ -52,7 +53,7 @@ class GitHubTriggerBase:
             description="Error message if the payload could not be processed"
         )
 
-    def run(self, input_data: Input, **kwargs) -> BlockOutput:
+    async def run(self, input_data: Input, **kwargs) -> BlockOutput:
         yield "payload", input_data.payload
         yield "triggered_by_user", input_data.payload["sender"]
 
@@ -123,7 +124,7 @@ class GithubPullRequestTriggerBlock(GitHubTriggerBase, Block):
             output_schema=GithubPullRequestTriggerBlock.Output,
             # --8<-- [start:example-webhook_config]
             webhook_config=BlockWebhookConfig(
-                provider="github",
+                provider=ProviderName.GITHUB,
                 webhook_type=GithubWebhookType.REPO,
                 resource_format="{repo}",
                 event_filter_input="events",
@@ -147,8 +148,9 @@ class GithubPullRequestTriggerBlock(GitHubTriggerBase, Block):
             ],
         )
 
-    def run(self, input_data: Input, **kwargs) -> BlockOutput:  # type: ignore
-        yield from super().run(input_data, **kwargs)
+    async def run(self, input_data: Input, **kwargs) -> BlockOutput:  # type: ignore
+        async for name, value in super().run(input_data, **kwargs):
+            yield name, value
         yield "event", input_data.payload["action"]
         yield "number", input_data.payload["number"]
         yield "pull_request", input_data.payload["pull_request"]

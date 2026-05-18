@@ -1,17 +1,24 @@
+import inspect
 import logging
 import time
 import uuid
 from typing import Sequence, cast
 
+from autogpt_libs.auth import get_user_id
+
 from backend.data import db
 from backend.data.block import Block, BlockSchema, initialize_blocks
-from backend.data.execution import ExecutionResult, ExecutionStatus
+from backend.data.execution import (
+    ExecutionStatus,
+    NodeExecutionResult,
+    UserContext,
+    get_graph_execution,
+)
 from backend.data.model import _BaseCredentials
 from backend.data.user import create_default_user
 from backend.executor import DatabaseManager, ExecutionManager, Scheduler
 from backend.notifications.notifications import NotificationManager
 from backend.server.rest_api import AgentServer
-from backend.server.utils import get_user_id
 
 log = logging.getLogger(__name__)
 
@@ -21,7 +28,7 @@ class SpinTestServer:
         self.db_api = DatabaseManager()
         self.exec_manager = ExecutionManager()
         self.agent_server = AgentServer()
-        self.scheduler = Scheduler()
+        self.scheduler = Scheduler(register_system_tasks=False)
         self.notif_manager = NotificationManager()
 
     @staticmethod
@@ -60,10 +67,9 @@ class SpinTestServer:
 
 async def wait_execution(
     user_id: str,
-    graph_id: str,
     graph_exec_id: str,
     timeout: int = 30,
-) -> Sequence[ExecutionResult]:
+) -> Sequence[NodeExecutionResult]:
     async def is_execution_completed():
         status = await AgentServer().test_get_graph_run_status(graph_exec_id, user_id)
         log.info(f"Execution status: {status}")
@@ -78,16 +84,19 @@ async def wait_execution(
     # Wait for the executions to complete
     for i in range(timeout):
         if await is_execution_completed():
-            graph_exec = await AgentServer().test_get_graph_run_results(
-                graph_id, graph_exec_id, user_id
+            graph_exec = await get_graph_execution(
+                user_id=user_id,
+                execution_id=graph_exec_id,
+                include_node_executions=True,
             )
+            assert graph_exec, f"Graph execution #{graph_exec_id} not found"
             return graph_exec.node_executions
         time.sleep(1)
 
     assert False, "Execution did not complete in time."
 
 
-def execute_block_test(block: Block):
+async def execute_block_test(block: Block):
     prefix = f"[Test-{block.name}]"
 
     if not block.test_input or not block.test_output:
@@ -104,10 +113,25 @@ def execute_block_test(block: Block):
 
     for mock_name, mock_obj in (block.test_mock or {}).items():
         log.info(f"{prefix} mocking {mock_name}...")
-        if hasattr(block, mock_name):
-            setattr(block, mock_name, mock_obj)
-        else:
+        # check whether the field mock_name is an async function or not
+        if not hasattr(block, mock_name):
             log.info(f"{prefix} mock {mock_name} not found in block")
+            continue
+
+        fun = getattr(block, mock_name)
+        is_async = inspect.iscoroutinefunction(fun) or inspect.isasyncgenfunction(fun)
+
+        if is_async:
+
+            async def async_mock(
+                *args, _mock_name=mock_name, _mock_obj=mock_obj, **kwargs
+            ):
+                return _mock_obj(*args, **kwargs)
+
+            setattr(block, mock_name, async_mock)
+
+        else:
+            setattr(block, mock_name, mock_obj)
 
     # Populate credentials argument(s)
     extra_exec_kwargs: dict = {
@@ -116,6 +140,7 @@ def execute_block_test(block: Block):
         "graph_exec_id": str(uuid.uuid4()),
         "node_exec_id": str(uuid.uuid4()),
         "user_id": str(uuid.uuid4()),
+        "user_context": UserContext(timezone="UTC"),  # Default for tests
     }
     input_model = cast(type[BlockSchema], block.input_schema)
     credentials_input_fields = input_model.get_credentials_fields()
@@ -135,7 +160,9 @@ def execute_block_test(block: Block):
     for input_data in block.test_input:
         log.info(f"{prefix} in: {input_data}")
 
-        for output_name, output_data in block.execute(input_data, **extra_exec_kwargs):
+        async for output_name, output_data in block.execute(
+            input_data, **extra_exec_kwargs
+        ):
             if output_index >= len(block.test_output):
                 raise ValueError(
                     f"{prefix} produced output more than expected {output_index} >= {len(block.test_output)}:\nOutput Expected:\t\t{block.test_output}\nFailed Output Produced:\t('{output_name}', {output_data})\nNote that this may not be the one that was unexpected, but it is the first that triggered the extra output warning"

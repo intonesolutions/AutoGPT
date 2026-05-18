@@ -7,7 +7,7 @@ from backend.blocks.hubspot._auth import (
 )
 from backend.data.block import Block, BlockCategory, BlockOutput, BlockSchema
 from backend.data.model import SchemaField
-from backend.util.request import requests
+from backend.util.request import Requests
 
 
 class HubSpotEngagementBlock(Block):
@@ -19,7 +19,7 @@ class HubSpotEngagementBlock(Block):
         )
         email_data: dict = SchemaField(
             description="Email data including recipient, subject, content",
-            default={},
+            default_factory=dict,
         )
         contact_id: str = SchemaField(
             description="Contact ID for engagement tracking", default=""
@@ -27,7 +27,6 @@ class HubSpotEngagementBlock(Block):
         timeframe_days: int = SchemaField(
             description="Number of days to look back for engagement",
             default=30,
-            optional=True,
         )
 
     class Output(BlockSchema):
@@ -43,7 +42,7 @@ class HubSpotEngagementBlock(Block):
             output_schema=HubSpotEngagementBlock.Output,
         )
 
-    def run(
+    async def run(
         self, input_data: Input, *, credentials: HubSpotCredentials, **kwargs
     ) -> BlockOutput:
         base_url = "https://api.hubapi.com"
@@ -67,7 +66,9 @@ class HubSpotEngagementBlock(Block):
                 }
             }
 
-            response = requests.post(email_url, headers=headers, json=email_data)
+            response = await Requests().post(
+                email_url, headers=headers, json=email_data
+            )
             result = response.json()
             yield "result", result
             yield "status", "email_sent"
@@ -81,7 +82,9 @@ class HubSpotEngagementBlock(Block):
 
             params = {"limit": 100, "after": from_date.isoformat()}
 
-            response = requests.get(engagement_url, headers=headers, params=params)
+            response = await Requests().get(
+                engagement_url, headers=headers, params=params
+            )
             engagements = response.json()
 
             # Process engagement metrics

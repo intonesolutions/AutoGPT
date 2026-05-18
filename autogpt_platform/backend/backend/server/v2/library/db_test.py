@@ -1,7 +1,9 @@
 from datetime import datetime
 
+import prisma.enums
 import prisma.errors
 import prisma.models
+import prisma.types
 import pytest
 
 import backend.server.v2.library.db as db
@@ -29,8 +31,8 @@ async def test_get_library_agents(mocker):
         prisma.models.LibraryAgent(
             id="ua1",
             userId="test-user",
-            agentId="agent2",
-            agentVersion=1,
+            agentGraphId="agent2",
+            agentGraphVersion=1,
             isCreatedByUser=False,
             isDeleted=False,
             isArchived=False,
@@ -38,7 +40,7 @@ async def test_get_library_agents(mocker):
             updatedAt=datetime.now(),
             isFavorite=False,
             useGraphIsActiveVersion=True,
-            Agent=prisma.models.AgentGraph(
+            AgentGraph=prisma.models.AgentGraph(
                 id="agent2",
                 version=1,
                 name="Test Agent 2",
@@ -70,8 +72,8 @@ async def test_get_library_agents(mocker):
     assert result.agents[0].id == "ua1"
     assert result.agents[0].name == "Test Agent 2"
     assert result.agents[0].description == "Test Description 2"
-    assert result.agents[0].agent_id == "agent2"
-    assert result.agents[0].agent_version == 1
+    assert result.agents[0].graph_id == "agent2"
+    assert result.agents[0].graph_version == 1
     assert result.agents[0].can_access_graph is False
     assert result.agents[0].is_latest_version is True
     assert result.pagination.total_items == 1
@@ -80,18 +82,22 @@ async def test_get_library_agents(mocker):
     assert result.pagination.page_size == 50
 
 
-@pytest.mark.asyncio(scope="session")
+@pytest.mark.asyncio(loop_scope="session")
 async def test_add_agent_to_library(mocker):
     await connect()
+
+    # Mock the transaction context
+    mock_transaction = mocker.patch("backend.server.v2.library.db.transaction")
+    mock_transaction.return_value.__aenter__ = mocker.AsyncMock(return_value=None)
+    mock_transaction.return_value.__aexit__ = mocker.AsyncMock(return_value=None)
     # Mock data
     mock_store_listing_data = prisma.models.StoreListingVersion(
         id="version123",
         version=1,
         createdAt=datetime.now(),
         updatedAt=datetime.now(),
-        agentId="agent1",
-        agentVersion=1,
-        slug="test-agent",
+        agentGraphId="agent1",
+        agentGraphVersion=1,
         name="Test Agent",
         subHeading="Test Agent Subheading",
         imageUrls=["https://example.com/image.jpg"],
@@ -100,8 +106,9 @@ async def test_add_agent_to_library(mocker):
         isFeatured=False,
         isDeleted=False,
         isAvailable=True,
-        isApproved=True,
-        Agent=prisma.models.AgentGraph(
+        storeListingId="listing123",
+        submissionStatus=prisma.enums.SubmissionStatus.APPROVED,
+        AgentGraph=prisma.models.AgentGraph(
             id="agent1",
             version=1,
             name="Test Agent",
@@ -115,8 +122,8 @@ async def test_add_agent_to_library(mocker):
     mock_library_agent_data = prisma.models.LibraryAgent(
         id="ua1",
         userId="test-user",
-        agentId=mock_store_listing_data.agentId,
-        agentVersion=1,
+        agentGraphId=mock_store_listing_data.agentGraphId,
+        agentGraphVersion=1,
         isCreatedByUser=False,
         isDeleted=False,
         isArchived=False,
@@ -124,7 +131,7 @@ async def test_add_agent_to_library(mocker):
         updatedAt=datetime.now(),
         isFavorite=False,
         useGraphIsActiveVersion=True,
-        Agent=mock_store_listing_data.Agent,
+        AgentGraph=mock_store_listing_data.AgentGraph,
     )
 
     # Mock prisma calls
@@ -136,35 +143,47 @@ async def test_add_agent_to_library(mocker):
     )
 
     mock_library_agent = mocker.patch("prisma.models.LibraryAgent.prisma")
-    mock_library_agent.return_value.find_first = mocker.AsyncMock(return_value=None)
+    mock_library_agent.return_value.find_unique = mocker.AsyncMock(return_value=None)
     mock_library_agent.return_value.create = mocker.AsyncMock(
         return_value=mock_library_agent_data
     )
+
+    # Mock the model conversion
+    mock_from_db = mocker.patch("backend.server.v2.library.model.LibraryAgent.from_db")
+    mock_from_db.return_value = mocker.Mock()
 
     # Call function
     await db.add_store_agent_to_library("version123", "test-user")
 
     # Verify mocks called correctly
     mock_store_listing_version.return_value.find_unique.assert_called_once_with(
-        where={"id": "version123"}, include={"Agent": True}
+        where={"id": "version123"}, include={"AgentGraph": True}
     )
-    mock_library_agent.return_value.find_first.assert_called_once_with(
+    mock_library_agent.return_value.find_unique.assert_called_once_with(
         where={
-            "userId": "test-user",
-            "agentId": "agent1",
-            "agentVersion": 1,
+            "userId_agentGraphId_agentGraphVersion": {
+                "userId": "test-user",
+                "agentGraphId": "agent1",
+                "agentGraphVersion": 1,
+            }
         },
-        include=library_agent_include("test-user"),
+        include={"AgentGraph": True},
     )
     mock_library_agent.return_value.create.assert_called_once_with(
-        data=prisma.types.LibraryAgentCreateInput(
-            userId="test-user", agentId="agent1", agentVersion=1, isCreatedByUser=False
+        data={
+            "User": {"connect": {"id": "test-user"}},
+            "AgentGraph": {
+                "connect": {"graphVersionId": {"id": "agent1", "version": 1}}
+            },
+            "isCreatedByUser": False,
+        },
+        include=library_agent_include(
+            "test-user", include_nodes=False, include_executions=False
         ),
-        include=library_agent_include("test-user"),
     )
 
 
-@pytest.mark.asyncio(scope="session")
+@pytest.mark.asyncio(loop_scope="session")
 async def test_add_agent_to_library_not_found(mocker):
     await connect()
     # Mock prisma calls
@@ -181,5 +200,5 @@ async def test_add_agent_to_library_not_found(mocker):
 
     # Verify mock called correctly
     mock_store_listing_version.return_value.find_unique.assert_called_once_with(
-        where={"id": "version123"}, include={"Agent": True}
+        where={"id": "version123"}, include={"AgentGraph": True}
     )

@@ -4,6 +4,8 @@ name: _intone Deploy Backend to EKS
 #   push:
 #     branches: [main]
 on:
+  push:
+    branches: [intone/eks]
   workflow_dispatch:
 
 jobs:
